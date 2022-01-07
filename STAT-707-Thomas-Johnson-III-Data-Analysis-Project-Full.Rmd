@@ -1,0 +1,1399 @@
+---
+title: "Looking into Inter-Variable Relationships and Classification with Five Predictor Models in the Bank Marketing Dataset to Determine Subscribed Status of Clients"
+author: "Thomas Johnson III"
+date: "November 29, 2021"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 6
+  pdf_document:
+    toc: yes
+    toc_depth: '6'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+This project will be focused on analyzing data to view the relationships between select features of a dataset and using a selection of features for the purpose of developing a classification model. The origin of the data,called the Bank Marketing Data Set, is from the UCI Machine Learning repository where it may be downloaded. The original endeavor concerning the Bank Marketing Data Set is (Moro et al., 2014). More relevant points of interest concerning the dataset may be found at the UCI data repository as well as (Moro et al., 2014) article.
+
+The Bank Marketing Data Set has 21 variables that can be utilized for data analysis and predictive modeling. The Bank Marketing Data Set can be found at [UCI](https://archive.ics.uci.edu/ml/datasets/bank+marketing) and is available for download.
+
+## Drive Behind the Project
+
+With data becoming more plentifully available, it has become ever more crucial to be able extract relevant data for a task and utilize the data effectively. Data science, machine learning, statistics, all three of these interweaving fields have become ever more valuable. In utilizing this dataset, the aim is be able to produce utilizable classification models under the constraints of the variables provided in Research Question 2. With businesses, public entities, and other organizations able to establish pipelines and cyberinfrastructure to amass, transfer, and process humongous amounts of data there is a natural goal to be able to utilize the data effectively. This requires narrowing down the features where there may be hundreds or thousands of features present. Additionally, this can also mean working with limited datasets in various contexts considering that data collection in and of itself is an expensive process to undertake in regard to monetary assets, time and other resources. This endeavor seeks to address two research questions to culminate in the production of machine learning models with the aim of being reliable means of identifying the y variable that will be established in researhc question 2.
+
+```{r message = FALSE}
+library(easypackages) #Load multiple packages at once
+```
+
+```{r message =FALSE}
+libraries("mice","tidyverse","naniar", 
+          "boot", "car", "doSNOW",
+          "randomForest", "foreach",
+          "GGally",
+          "corrplot", "data.table", "MASS","vcd",
+          "caret")
+```
+
+Beginning by loading the data in:
+
+```{r}
+bank_data <- read.csv("./bank_dataset_without_semicolons.csv")
+#write.csv(x=bank_data, file="./bank_dataset_without_commas.csv")
+```
+
+# Exploratory Data Analysis
+
+## Dimensions of the data
+
+First finding the quanitity of instances in the dataset:
+
+```{r}
+print(nrow(bank_data))
+```
+
+There are 4119 instances present in the data.
+
+Next is finding the quantity of variables that are present within the dataset:
+
+```{r}
+bank_data <- bank_data %>% rename(., subscribed = y)
+print(names(bank_data))
+print(length(names(bank_data)))
+```
+
+There are 21 variables capable in the dataset. The reason why is that the variable 'X' is literally the index of each instance.
+
+Printing the first ten instances of the data to get a glance into it:
+
+```{r}
+head(bank_data, 10)
+```
+
+## Finding Missing Data
+
+Does your dataset contain missing values? Which variables contain missing values?
+
+```{r}
+bank_data[bank_data =="unknown"]<-NA # A common way to denote missing 
+#values in the data is to use "unknown" string
+```
+
+
+```{r}
+print(bank_data %>% summarise_all(funs(sum(is.na(.)))))
+#Total count of missing values throughout the data frame.
+```
+
+We can observe that for the job status variable there are 39 missing values, for the marital status variable there are 11 missing values, for the education status variable there are 167 missing values, for the default variable there are 803 missing values, for the housing vaariable there are 105 missing values, for the loan variable there are 105 missing values.
+
+```{r}
+print(sum(bank_data %>% summarise_all(funs(sum(is.na(.))))) )
+```
+
+Now we can observe there are 1230 missing values across all variables in the dataset.
+
+A visualization of these missing values can assist:
+
+```{r}
+md.pattern(bank_data, rotate.names = T)
+```
+
+The above plot displays patterns of missing data. For example, one instance in the data is missing values for marital status and default status. Another 10 instances are only missing a value for the marriage variable. This plot helps visualize points of interest concerning the missing data, and the quantity of instances affected when managing the missing data for each variable or group of variables.
+
+## Research Questions for the Data
+
+Now to break down the research questions for the data that will be explored and tested.
+
+
+## Research Question 1
+
+What is the relationship between job/marital status and default status?
+
+$H_{0}$: No relationship exists amongst the variables.
+
+$H_{a}$: A relationship exists amongst at least two of the variables.
+
+## Research Question 1 Variables:
+
+Job status: What employment the client had (Dua and Graff, 2019).
+
+Marital status: If the client was married, divorced (which also includes those who spouse has passed away) or single (Dua and Graff, 2019).
+
+### Research Question 1 Response:
+
+Default status: If the client has defaulted on their credit (Dua and Graff, 2019).
+
+### Research Question 1 Missing Values:
+
+Missing values for research question 1: 
+
+
+```{r warning=FALSE}
+categorical_missing.plot.object <- bank_data %>% 
+  dplyr::select(default, job, marital) %>% gg_miss_var()
+print(categorical_missing.plot.object)
+```
+
+There are 39 missing values for the job variable.
+
+There are 11 missing values for the marital variable.
+
+There are 803 missing values for the default variable.
+
+### Distribution of Response Variable for Research Question 1
+
+Response variable distribution for research question 1
+
+```{r}
+bank_data %>% 
+  dplyr::select(default) %>% 
+  ggplot(aes(x=factor(default))) + 
+  geom_bar() + 
+  theme_bw() + 
+  xlab("Has the Potential Client Previously Defaulted") +
+  ylab("Count") + ggtitle("Distibution of Values for Default Variable") + 
+  scale_x_discrete()
+```
+
+We can see most of the values for default are 'no', followed by missing values, or 'NA', then 'yes.'
+
+## Research Question 2
+
+Can emp.var.rate, loan, default, education, campaign and previous.contact (to be substituted for pdays to avoid issues with missing values) be used to build a sufficient model to predict y, where y is whether the client has agreed to a term deposit subscription (classification)?
+
+$H_{0}$: None of the variables will be able to be used to build a sufficient model to predict y.
+
+$H_{a}$: At least one of the variables will be able to be used to build a sufficient model to predict y.
+
+### Research Question 2 Variables:
+
+emp.var.rate: Measure of the employment variation rate (Dua and Graff, 2019).
+
+loan: The client currently possesses a personal loan (Dua and Graff, 2019).
+
+default: If the client has defaulted on their credit (Dua and Graff, 2019).
+
+education: The education status or level of the clients (Dua and Graff, 2019).
+
+campaign: Quantity of attempts to reach out to client for the marketing campaign this data was collected within (Dua and Graff, 2019).
+
+previous.contact: If the client was previously contacted from a marketing campaign preceding the one this data was collected in. Produced from utilizing data wrangling techniques on the pdays variable.
+
+### Research Question 2 Variables:
+
+y or subscribed: The binary outcome of whether the client has accepted a subscription for the term deposit product (Dua and Graff, 2019).
+
+
+### Research Question 2 Missing Values:
+
+```{r warning=FALSE}
+predictor_var_missing.plot.object <- bank_data %>% 
+  dplyr::select(emp.var.rate, loan, default, education, campaign, pdays, subscribed) %>% 
+  gg_miss_var()
+print(predictor_var_missing.plot.object)
+```
+
+There are 803 missing values for the default variable.
+
+There are 167 missing values for the education variable.
+
+There are 105 missing values for the loan variable.
+
+The remaining variables of pdays, emp.var.rate, campaign, subscribed have no missing values.
+
+### Research Question 2 Response Variable Distribution
+
+Response variable distribution for research question 2
+
+```{r}
+bank_data %>% 
+  dplyr::select(subscribed) %>% 
+  ggplot(aes(x=factor(subscribed))) + 
+  geom_bar() + 
+  theme(panel.background = 
+          element_rect(fill="white", color="black"), 
+        panel.grid = element_line(colour = "darkgray")) + 
+  xlab("Has the Potential Client Gotten a Term Deposit") +
+  ylab("Count") + 
+  ggtitle("Distibution of Values for Y Variable")
+```
+
+We can see that the majority class is 'no' and the minority class is 'yes' and subscribed status classes are heavily imbalanced.
+
+```{r}
+options(digits =3)
+```
+
+## Glimpsing Data
+
+Performing a quick glimpse of the data before data cleaning and wrangling.
+
+```{r}
+glimpse(bank_data)
+```
+
+We can see the variables of interest are either integer, double, or characters.
+
+## Data Cleaning and Data Wrangling
+
+First step in data cleaning will be to get rid of the indices variable 'X" as it contributes nothing to the analysis as it is the index. The variable "duration" is also removed as it is indicated in the documentation of the dataset to be highly correlated with "y."
+
+```{r}
+bank.2 <- bank_data %>% dplyr::select(.,-c(X,duration))
+```
+
+Checking the variables to make sure "X" was removed:
+
+```{r}
+print(names(bank.2))
+```
+
+```{r}
+bank.2.pdays.unaltered = bank.2 
+```
+
+
+## Addressing Missing Values
+
+For pdays, there are repeat entries of 999. This is to indicate that the prospective client was not contacted before within a previous direct marketing campaign by the bank. For the summary statistics, we convert each 999 to ```NA```, create a new variable previous.contact as a factor to indicate if previous contact with the client was made, then proceed to calculate the summary statistics. Otherwise, the distribution for the pdays variable would be skewed to the right heavily if we calculated its summary statistics and highly misleading. The for pdays is not technically missing, in so much that the format in the dataset is not appropriately captured.
+
+For more accurate details as to whether a potential client was previously contacted, we create the previous.contact variable. It is created using the value 999 from pdays to determine if a potential client was previously contacted or not, and will present less issues than working directly with pdays for predictive modeling later. Although we lose the data on how long ago previous contact may have occurred, the previous.contact variable preserves the crucial information on whether a client was previously contacted without producing highly skewed distributions in the data.
+
+For the categorical variables of loan, job, marital and default, we have have over 800 missing values. We will use ```na.omit``` like methods to ensure that these missing values do not jeopardize calculations 
+
+```{r}
+# Using NA values to fill in for missing data.
+bank.2 = bank.2 %>% 
+  mutate(previous.contact = ifelse(pdays == 999, 0, 1),
+         previous.contact = factor(previous.contact),
+         pdays = ifelse(pdays == 999, NA, pdays))
+```
+
+## Significance Level For Testing and Confidence Intervals
+
+Significance level for the evaluations in this endeavor will be at the 95% significance level.
+
+## Summary Statistics for Relevant Variables for Each Research Question
+
+### Research Question 1 Restatement
+
+What is the relationship between job/marital status and default status?
+
+$H_{0}$: No relationship exists amongst the variables.
+
+$H_{a}$: A relationship exists amongst at least two of the variables.
+
+#### Research Question 1 Variables:
+
+Job status: What employment the client had (Dua and Graff, 2019).
+
+Marital status: If the client was married, divorced (which also includes those who spouse has passed away) or single (Dua and Graff, 2019).
+
+#### Research Question 1 Response:
+
+Default status: If the client has defaulted on their credit (Dua and Graff, 2019).
+
+##### Examining Default Status and Job Status
+
+Computing counts for job status and default status. Then calculating the percentage of responses with respect to default by the total number of clients who had a specific job.
+
+```{r}
+#Getting the totals for job status with respect to default status
+job_totals = bank.2 %>% dplyr::select(.,job,default) %>%
+  na.omit() %>%
+  group_by(job) %>%
+  count()
+
+#Getting the totals for job status with respect to default status
+default_by_job = bank.2 %>% dplyr::select(.,job, default) %>%
+  na.omit() %>%
+  group_by(job, default) %>%
+  count()
+
+# Constructing a data frame with the number of clients by default status 
+# with respect to the job status, with the number of clients
+# job status
+default_by_job = right_join(x=default_by_job, y= job_totals, by = "job")
+default_by_job= default_by_job %>% 
+  rename(total_clients_with_job = n.y, 
+         number_of_clients = n.x)
+
+# Getting the percentage of clients in default 
+# status with respect to job status
+default_by_job = default_by_job %>% 
+  mutate(percent_by_job = (number_of_clients/total_clients_with_job)*100) %>%
+  dplyr::select(.,-c("total_clients_with_job"))
+```
+
+```{r}
+print(default_by_job)
+```
+
+It can be observed that for all job statuses, at least 80% of applicants that said no in regards to currently defaulting on credit.
+
+```{r}
+#Constructing table of default status and job status
+default_by_job.table = table(factor(bank.2$default), factor(bank.2$job))
+```
+
+To see if there is a correlation between the variables default and job, we utilize a chi-squared test at the 95% significance level:
+
+```{r warning=FALSE}
+# Perfroming Chi-Squared test on previous
+# table default_by_job.table
+chisq.test(default_by_job.table)
+```
+
+It can be observed that the p-value is 0.0002, where $\chi^{2}=4$ and degrees of freedom is 10, which is statistically significant.  Both variables default status and job status appear to have a relationship
+
+
+##### Examining Default Status and Marital Status
+
+Computing counts for marital status and default status. Then calculating the percentage of responses with respect to default by the total number of clients who had a specific marriage status.
+
+```{r}
+# Marital status totals
+marital_totals = bank.2 %>% dplyr::select(.,marital,default) %>%
+  na.omit() %>%
+  group_by(marital) %>%
+  count()
+
+# Marital status totals with respect to default status
+default_by_marital = bank.2 %>% dplyr::select(.,marital, default) %>%
+  na.omit() %>%
+  group_by(marital, default) %>%
+  count()
+
+# Marital status totals with respect to default status
+# and total per marital status
+default_by_marital = right_join(x=default_by_marital, 
+                                y= marital_totals, 
+                                by = "marital")
+
+# Marital status totals with respect to default status
+# and total per marital status
+default_by_marital= default_by_marital %>% 
+  rename(total_clients_by_marital = n.y, 
+         number_of_clients = n.x)
+
+# Getting the percentages of the quantity of clients
+# for each default status with respect to marital 
+# status
+default_by_marital = default_by_marital %>% 
+  mutate(percent_by_marital = (number_of_clients/total_clients_by_marital)*100) %>%
+  dplyr::select(.,-c("total_clients_by_marital"))
+```
+
+```{r}
+print(default_by_marital)
+```
+
+It can be observed for each marital status that at least 82% of applicants answered that they had not currently defaulted on their credit.
+
+```{r}
+#Constructing the table for marital status and default status
+default_by_marital.table = table(factor(bank.2$default), factor(bank.2$marital))
+```
+
+Now to perform a chi-squared test to observe whether there is a correlation between marital status and default status. We will be testing at the 95% significance level.
+
+```{r warning=FALSE}
+#Chi-Squared test for the marital status and default status
+chisq.test(default_by_marital.table)
+```
+
+The Chi-squared test produces a p-value of 0.7, where $\chi^{2} = 0.2$ and the degrees of freedom is 2, which is statistically insignificant. There appears to be no correlation between the default status and the marital status. Both marital status and default status appear to be independent.
+
+### Research Question 2 Restatement
+
+Can emp.var.rate, loan, default, education, campaign and previous.contact (to be substituted for pdays to avoid issues with missing values) be used to build a sufficient model to predict y, where y is whether the client has agreed to a term deposit subscription (classification)?
+
+$H_{0}$: None of the variables will be able to be used to build a sufficient model to predict y.
+
+$H_{a}$: At least one of the variables will be able to be used to build a sufficient model to predict y.
+
+#### Research Question 2 Variables:
+
+emp.var.rate: Measure of the employment variation rate (Dua and Graff, 2019).
+
+loan: The client currently possesses a personal loan (Dua and Graff, 2019).
+
+default: If the client has defaulted on their credit (Dua and Graff, 2019).
+
+education: The education status or level of the clients (Dua and Graff, 2019).
+
+campaign: Quantity of attempts to reach out to client for the marketing campaign this data was collected within (Dua and Graff, 2019).
+
+previous.contact: If the client was previously contacted from a marketing campaign preceding the one this data was collected in. Produced from utilizing data wrangling techniques on the pdays variable.
+
+#### Research Question 2 Variables:
+
+y or subscribed: The binary outcome of whether the client has accepted a subscription for the term deposit product (Dua and Graff, 2019). 
+
+#### Getting Summary Statistics
+
+Constructing the summary statistics for the  numerical data:
+
+```{r}
+# Getting general summary statistics
+summ.stats = bank.2 %>%
+  dplyr::select(.,emp.var.rate, campaign) %>%
+  summarise_all(., list(avg = mean, stan.dev = sd, 
+                        minimum = min, 
+                        median.cal = median, 
+                        maximum = max), 
+                na.rm = T)
+```
+
+```{r}
+print(summ.stats)
+```
+
+Acquiring the first and third quantiles:
+
+```{r}
+#Getting the first and third quartile
+summ.stats.2 = bank.2 %>% 
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(first.quantile = quantile), 
+                na.rm = T, probs = 0.25)
+
+summ.stats.3 = bank.2 %>% 
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(third.quantile = quantile), 
+                na.rm = T, probs = 0.75)
+```
+
+
+Putting summary statistics for numerical data within a single dataframe:
+
+```{r}
+#Getting the names of the variables involved
+fetch_names = bank.2 %>% 
+  dplyr::select(c(emp.var.rate, campaign))
+
+#Constructing a new dataframe with combined summary statistics
+summ.stats.org = data.frame(t(summ.stats[,c(1:2)]),
+                            t(summ.stats[,c(3:4)]),
+                            t(summ.stats[,c(5:6)]),
+                            t(summ.stats[,c(7:8)]),
+                            t(summ.stats[,c(9:10)]),
+                            t(summ.stats.2),
+                            t(summ.stats.3),
+                            row.names = names(fetch_names)
+                    )
+
+#Names summary statistics methods
+measurements.base.names = c("avg", "stan.dev", "minimum" , 
+                        "median.cal", "maximum", "first.quantile",
+                        "third.quantile")
+
+#Assigning the column names
+names(summ.stats.org) = c("avg", "stan.dev", "minimum" , 
+                        "median.cal", "maximum", "first.quantile",
+                        "third.quantile")
+
+#Performing the transpose of the dataframe
+variable_names.data.base = row.names(summ.stats.org)
+summ.stats.org = data.table::transpose(summ.stats.org)
+names(summ.stats.org) = variable_names.data.base
+row.names(summ.stats.org) = measurements.base.names
+```
+
+```{r}
+print(summ.stats.org)
+```
+
+For research question 2, the quantitative variables that we want to focus on are the emp.var.rate and the pdays.
+
+
+```{r}
+#Setting a random seed
+set.seed(10)
+
+#Getting the quantitative variables 
+visual_data_set <- bank.2 %>% 
+  dplyr::select(.,emp.var.rate, campaign) %>%
+  na.omit()
+
+#Get the correlations of the quantitative variables
+var_corr = cor(visual_data_set)
+
+#Getting 95% confidence level confidence intervals for the correlation
+test.conf.interval = cor.mtest(visual_data_set, conf.level = 0.95)
+```
+
+Plotting $95\%$ confidence level confidence intervals for the correlations between the three numeric variables.
+
+```{r}
+#Constructing the correlation plot with confidence intervals
+corrplot::corrplot(var_corr, number.digits=2, 
+                   low = test.conf.interval$lowCI, 
+                   up = test.conf.interval$uppCI, 
+                   plotCI = "rect",
+                  diag = F)
+```
+
+
+
+```{r}
+#Constructing the correlation plot with correlation measures
+corrplot::corrplot(var_corr, number.digits=2, 
+                   addCoef.col = "black", diag = F)
+```
+
+As can be observed from the four plots above, the correlation between the emp.var.rate and pdays suggests there may be a weak positive relationship between the two variables based on the data. This is appaears to be the strongest relationship present with a correlation of $r = 0.21$, while the correlations for pdays and campaign and 
+
+#### Numeric Summary Statistics When Grouping By Loan
+
+If we group by loan then perform the summary statistics:
+
+```{r message = FALSE}
+#Summary statistics with regard to loan variable
+summ.stats.loan = bank.2 %>% 
+  group_by(loan) %>%
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(avg = mean, stan.dev = sd, minimum = min, 
+                        median.cal = median, maximum = max), 
+                na.rm = T)
+summ.stats.loan = summ.stats.loan[1:2,]
+```
+
+```{r}
+print(summ.stats.loan)
+```
+
+
+
+```{r message = FALSE}
+# First and third quartiles with respect ot the loan variable
+summ.stats.2.loan = bank.2 %>% 
+  group_by(loan) %>%
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(first.quantile = quantile), 
+                na.rm = T, probs = 0.25)
+
+summ.stats.2.loan = summ.stats.2.loan[1:2,]
+
+summ.stats.3.loan = bank.2 %>% 
+  group_by(loan) %>%
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(third.quantile = quantile), 
+                na.rm = T, probs = 0.75) 
+
+summ.stats.3.loan = summ.stats.3.loan[1:2,]
+```
+
+
+```{r}
+print(summ.stats.2.loan)
+```
+
+
+```{r}
+print(summ.stats.3.loan)
+```
+
+```{r}
+#Combining previously created dataframes
+summ.stats.org.loan = right_join(x=summ.stats.loan, 
+                                 y=summ.stats.2.loan, 
+                                by="loan")
+summ.stats.org.loan = right_join(x=summ.stats.org.loan, 
+                                 y=summ.stats.3.loan, 
+                                by="loan")
+```
+
+```{r}
+#Perfroming dataframe transpose
+summ.stats.org.loan_transpose =data.table::transpose(summ.stats.org.loan)
+row.names(summ.stats.org.loan_transpose) =names(summ.stats.org.loan)
+names(summ.stats.org.loan_transpose) = c(paste("loan_",summ.stats.org.loan_transpose[1,1], sep=""), 
+                                         paste("loan_",summ.stats.org.loan_transpose[1,2], sep=""))
+summ.stats.org.loan_transpose = summ.stats.org.loan_transpose[2:nrow(summ.stats.org.loan_transpose),]
+```
+
+Thus the resulting summary statistics for when potential clients  have taken a loan previously (loan.yes), and when potential clients  have not taken a loan previously (loan.no).
+
+```{r}
+print(summ.stats.org.loan_transpose)
+```
+
+We can observe that there is a small difference between the campaign average and pdays average for loan_no and loan_yes. The same came be said of the campaign standard deviation. There are also notable differences in the median values for pdays and the maximum values for pdays for whether the potential client had taken a previous loan or not. The maximum values for campaign are significantly different, which has influenced the standard deviation loan_no to be greater than loan_yes. The standard devaition for loan_no for pdays is notably higher than that of the pdays standard deviation for loan_yes. A small difference can be observed in the difference between the third quartile for loan_no and the third quartile for loan_yes.
+
+#### Numeric Summary Statistics When Grouping By Default
+
+Grouping by default and getting summary statistics:
+
+```{r message = FALSE}
+#Getting summary statistics with respect to default variable
+summ.stats.default = bank.2 %>% 
+  group_by(default) %>%
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(avg = mean, stan.dev = sd, 
+                        minimum = min, 
+                        median.cal = median, 
+                        maximum = max), 
+                na.rm = T)
+summ.stats.default = summ.stats.default[1:2,]
+```
+
+```{r}
+print(summ.stats.default)
+```
+
+Finding the quantiles for the numeric data:
+
+```{r message=FALSE}
+summ.stats.2.default = bank.2 %>% 
+  group_by(default) %>%
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(first.quantile = quantile), 
+                na.rm = T, probs = 0.25)
+
+summ.stats.2.default = summ.stats.2.default[1:2,]
+
+summ.stats.3.default = bank.2 %>% 
+  group_by(default) %>%
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(third.quantile = quantile), 
+                na.rm = T, probs = 0.75) 
+
+summ.stats.3.default = summ.stats.3.default[1:2,]
+```
+
+
+```{r}
+print(summ.stats.2.default)
+```
+
+
+```{r}
+print(summ.stats.3.default)
+```
+
+```{r}
+summ.stats.org.default = right_join(x=summ.stats.default, 
+                                    y=summ.stats.2.default, 
+                                by="default")
+summ.stats.org.default = right_join(x=summ.stats.org.default,
+                                    y=summ.stats.3.default, 
+                                by="default")
+```
+
+```{r}
+summ.stats.org.default_transpose =data.table::transpose(summ.stats.org.default)
+row.names(summ.stats.org.default_transpose) =names(summ.stats.org.default)
+names(summ.stats.org.default_transpose) = c(paste("default.",summ.stats.org.default_transpose[1,1], sep=""), 
+                                         paste("default.",summ.stats.org.default_transpose[1,2], sep=""))
+summ.stats.org.default_transpose = summ.stats.org.default_transpose[2:nrow(summ.stats.org.default_transpose),]
+```
+
+```{r}
+print(summ.stats.org.default_transpose)
+```
+
+When grouping by default then attempting to get the summary statistics, it should be noted that the default variable has a majority of "unknown" values that are converted to ```NA```. The column default_no is if the potential client to not have defaulted previously, and default_yes indicates the potential client. We can see slight differences for the average for campaign and pdays for default_no and default_yes. There are also differences in the standard deviations for emp.var.rate and campaign for default_no and default_yes. The pdays standard devaiation differes noticably for default_no and default_yes.There is a notciable difference between default_yes and default_no. The maximum between default_yes and default_no fro campaignare siginficant, but data visualizations should be able to shine light on how much of an influence the maximum might have.
+
+#### Numerical Summary Statistics When Grouping By Education
+
+Grouping by education to get the relevant summary statistics:
+
+```{r message=FALSE, warning = FALSE}
+#Getting summary statistics with respect to eduction variable
+summ.stats.education = bank.2 %>% 
+  group_by(education) %>%
+  dplyr::select(.,c(emp.var.rate, campaign, pdays)) %>%
+  summarise_all(., list(avg = mean, stan.dev = sd, 
+                        minimum = min, 
+                        median.cal = median, 
+                        maximum = max), 
+                na.rm = T)
+summ.stats.education = summ.stats.education[1:(length(unique(bank.2$education))-1),]
+```
+
+```{r}
+print(summ.stats.education)
+```
+
+Calculating the first and third quartiles of numerical data when grouping by education:
+
+```{r message=FALSE}
+summ.stats.2.education = bank.2 %>% 
+  group_by(education) %>%
+  dplyr::select(.,c(emp.var.rate, campaign
+                    )) %>%
+  summarise_all(., list(first.quantile = quantile), 
+                na.rm = T, probs = 0.25)
+
+summ.stats.2.education = summ.stats.2.education[1:(length(unique(bank.2$education))-1),]
+
+summ.stats.3.education = bank.2 %>% 
+  group_by(education) %>%
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(third.quantile = quantile), 
+                na.rm = T, probs = 0.75) 
+
+summ.stats.3.education = summ.stats.3.education[1:(length(unique(bank.2$education))-1),]
+```
+
+
+```{r}
+print(summ.stats.2.education)
+```
+
+
+```{r}
+print(summ.stats.3.education)
+```
+
+```{r}
+summ.stats.org.education = right_join(x=summ.stats.education, 
+                                      y=summ.stats.2.education, 
+                                by="education")
+summ.stats.org.education = right_join(x=summ.stats.org.education, 
+                                      y=summ.stats.3.education, 
+                                by="education")
+```
+
+```{r}
+summ.stats.org.education_transpose =data.table::transpose(summ.stats.org.education)
+row.names(summ.stats.org.education_transpose) =names(summ.stats.org.education)
+names(summ.stats.org.education_transpose) = summ.stats.education$education
+summ.stats.org.eduation_transpose = summ.stats.org.education_transpose[c(-1),]
+```
+
+```{r}
+print(summ.stats.org.eduation_transpose)
+```
+
+We can see immediately that amongst the seven values for education that there are a lot of missing values for the illiterate column. This may be impacted by whether potential clients who were illiterate possibly not providing as much information as other education groups. The issing data could be signficant in affecting the predictive models constructed in in part 4. The basic.4y and basic.6y  education emp.var.rate averages are the highest with the lowest average for emp.var.rate being observed for those potnetial clients that calimed to be illiterate. The average for pdays varied, with the professional.course group having the highest average of 7.09 and the lowest recorded being basic.6y with an average of 2. The standard deviation for pdays can be seen to mirror the average for pdays for each education group. The minimum emp.var.rate for potential clients who  be illiterate were was -2.9 which is larger when compared to other education groups where the value was -3.4. The largest pdays maximum value can be observed in the high.school education group.
+
+#### Numerical Summary Statistics with Respect to Subscribed Status (y)
+
+Computing group summary statistics with respect to y:
+
+```{r message=FALSE}
+#Getting summary statistics with respect to y
+summ.stats.y = bank.2 %>% 
+  group_by(subscribed) %>%
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(avg = mean, stan.dev = sd, minimum = min, 
+                        median.cal = median, maximum = max), 
+                na.rm = T)
+```
+
+```{r}
+print(summ.stats.y)
+```
+
+Calculating the first and third quartiles of numerical data when grouping by subscribed:
+
+```{r message=FALSE}
+summ.stats.2.y = bank.2 %>% 
+  group_by(subscribed) %>%
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(first.quantile = quantile), 
+                na.rm = T, probs = 0.25)
+
+
+summ.stats.3.y = bank.2 %>% 
+  group_by(subscribed) %>%
+  dplyr::select(.,c(emp.var.rate, campaign)) %>%
+  summarise_all(., list(third.quantile = quantile), 
+                na.rm = T, probs = 0.75) 
+
+```
+
+
+```{r}
+print(summ.stats.2.y)
+```
+
+```{r}
+print(summ.stats.3.y)
+```
+
+```{r}
+summ.stats.org.y = right_join(x=summ.stats.y,  
+                              y=summ.stats.2.y, 
+                                by="subscribed")
+summ.stats.org.y = right_join(x=summ.stats.org.y, 
+                              y=summ.stats.3.y, 
+                                by="subscribed")
+```
+
+```{r}
+summ.stats.org.y_transpose =data.table::transpose(summ.stats.org.y)
+row.names(summ.stats.org.y_transpose) =names(summ.stats.org.y)
+names(summ.stats.org.y_transpose) = c(paste("subscribed_",summ.stats.org.y_transpose[1,1], sep=""), 
+                                         paste("subscribed_",summ.stats.org.y_transpose[1,2], sep=""))
+summ.stats.org.y_transpose = summ.stats.org.y_transpose[2:nrow(summ.stats.org.y_transpose),]
+```
+
+```{r}
+print(summ.stats.org.y_transpose)
+```
+
+For subscribed status (y) we can see notable differences in the averages of emp.var.rate, campaign. There are also noticable differences in the standard deviations of campaign as well for subscribed status. A slight difference can be spotted in the median of emp.var.rate for the two groups of subscription status. For the maximum values of campaign, there is a large difference of 24 days between subscribed_no and subscribed_yes.
+
+#### Examining Emp.var.rate and Subscribed Status Using a Simple Logistic Regression model:
+
+```{r}
+bank.2.convert.labels = bank.2 %>% mutate(subscribed = ifelse( subscribed == "yes", 1, 0))
+```
+
+```{r}
+emp.var.rate.glm = glm(subscribed ~ emp.var.rate, data=bank.2.convert.labels, family = binomial)
+```
+
+```{r}
+summary(emp.var.rate.glm)
+```
+
+```{r message = FALSE}
+confint(emp.var.rate.glm)
+```
+
+
+According to results given by the logistic regression model, emp.var.rate may have a relationship with the with the value of y considering the confidence interval for emp.var.rate excludes 0, satisfying the significance test at the 95% significance level.
+
+#### Examining Subscribed Status and campaign Using a Simple Logistic Regression Model:
+
+```{r}
+campaign.glm = glm(subscribed ~ campaign, 
+                   data=bank.2.convert.labels, 
+                   family = binomial)
+```
+
+```{r}
+summary(campaign.glm)
+```
+
+```{r message = FALSE}
+confint(campaign.glm)
+```
+
+
+According to results given by the logistic regression model, campaign may have a relationship with the with the value of y considering the confidence interval for campaign excludes 0, satisfying the 95% significance level.
+
+#### Examining Subscribed Status and Previous.contact Using a Chi-Squared Test:
+
+```{r}
+subscribed_by_prev.contact.table = table(factor(bank.2$subscribed), factor(bank.2$previous.contact))
+```
+
+```{r}
+chisq.test(subscribed_by_prev.contact.table)
+```
+
+According to the results of the Chi-Squared Test, the variable previous.contact may have a relationship with y as the p-value is statistically significant satisfying the 95% significance level as the p-value is close to 0 with a $\chi^{2} = 448$ and 1 degree of freedom.
+
+#### Examining Subscribed Status and Education Using a Chi-Squared Test:
+
+```{r}
+subscribed_by_education.table = table(factor(bank.2$subscribed), factor(bank.2$education))
+```
+
+```{r warning = FALSE}
+chisq.test(subscribed_by_education.table)
+```
+
+According the Chi-Squared test with a $\chi^{2}$ value of 448 and 1 degree of freedom, the resulting p-value is 0.005 which is statistically significant at the 95% significance level. Subscribed status may have a relationship with education status, but there may be an issue with the Chi-Square test so further investigation as to whether education will be useful for the predictive model will happen in Part IV
+
+#### Examining Subscribed Status and Loan Using a Chi-Squared Test:
+
+```{r}
+subscribed_by_loan.table = table(factor(bank.2$subscribed), factor(bank.2$loan))
+```
+
+```{r}
+chisq.test(subscribed_by_loan.table)
+```
+
+According the Chi-Squared test with a $\chi^{2}$ value of 0.4 and 1 degree of freedom, the resulting p-value is 0.5 which is not statistically significant at the 95% signficance level. The variables subscribed status (y) and loan seem to be independent.
+
+
+#### Examining Subscribed Status and Default Using a Chi-Squared Test:
+
+```{r}
+subscribed_by_default.table = table(factor(bank.2$subscribed), factor(bank.2$default))
+```
+
+```{r warning=FALSE}
+chisq.test(subscribed_by_default.table)
+```
+
+According the Chi-Squared test with a $\chi^{2}$ value of 0.4 and 1 degree of freedom, the resulting p-value is 0.5 which is not statistically significant at the 95% signficance level. The variables subscribed status (y) and default seem to be independent.
+
+## Data Visualizations to Complement Summary Statistics
+
+### Research Question 1 Visualizations
+
+#### Stacked Bar Graph for Marital Status and Default Status:
+
+```{r}
+bank.2 %>% 
+  dplyr::select(.,marital, default) %>%
+  na.omit() %>%
+  group_by(., marital, default) %>% 
+  count() %>%
+  rename(.,frequency = "n") %>%
+  ggplot(.,aes(x = factor(marital), y =frequency, fill=default)) +
+  geom_bar(position="dodge", stat = "identity") +
+  labs(title = "Marital Status Versus Default Status",
+       x = "Marital Status", y ="Count") +
+  theme_bw() +
+  geom_text(aes(label = frequency), 
+            vjust = -0.3, 
+            position = position_dodge(.9))
+```
+
+
+As could be observed when computing tables beforehand, for each marital group, a majority of the clients credit was not currently in default. Observing this graph further supports the results of the Chi-Squared test performed earlier. Only a small amount of 
+
+
+```{r}
+bank.2 %>% 
+  dplyr::select(.,job, default) %>%
+  na.omit() %>%
+  group_by(., job, default) %>% 
+  count() %>%
+  rename(.,frequency = "n") %>%
+  ggplot(.,aes(x = factor(job), y =frequency, fill=factor(default))) +
+  geom_bar(position="dodge", stat = "identity")+
+  labs(title = "Job Status Versus Default Status",
+       x = "Job Status", y ="Count") +
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=90)) +
+  geom_text(aes(label = frequency), 
+            vjust = -0.3, 
+            position = position_dodge(.9))
+```
+
+As could be observed when computing the grouped job status and default status beforehand, the variables appear to a relationship with one another one another. Additionally for each job status, the majority of potential clients  have not currently be in default with their credit at the time of contact. 
+
+### Research Question 2 Visualizations
+
+Using ggpairs, we will draw the correlation plots for the quantitative variables emp.var.rate, campaign, pdays:
+
+```{r}
+visual_data_set.2 <- bank.2 %>% 
+  dplyr::select(.,emp.var.rate, 
+                campaign, subscribed) %>%
+  na.omit()
+visual_data_set.2  %>% ggpairs()
+```
+
+It can be observed that with the pair of the variables emp.var.rate and campaign there seems to be a weak positive relationship. 
+
+We will be evaluating at the 95% significance level.
+
+For the qualitative variables we draw a mosaic plots.
+
+#### Mosaic Plot for Subscibed Status and Loan Status
+
+```{r}
+loan.y.cont = xtabs(~subscribed+loan, bank.2)
+```
+
+```{r}
+print(loan.y.cont)
+```
+
+
+```{r}
+mosaic(x= loan.y.cont, 
+           main="Default Status and Loan Status",
+           xlab="Subscribed ", ylab="Loan Status",
+           shade = T, legend=T)
+```
+
+
+The mosaic plot that was drawn indicates that there is a strong relationship between the variables of whether the person subscribed,y, and loan. The resulting p-value is 0.5. As a result, from the mosaic plot we can conclude that for the variables y and loan that that they are independent.
+
+#### Mosaic Plot Between Subscribed Status and Default:
+
+```{r}
+y.default.cont = xtabs(~subscribed+default, bank.2)
+```
+
+```{r}
+print(y.default.cont)
+```
+
+
+```{r}
+mosaic(x= y.default.cont, 
+           main="Subscribed Status and Default Status",
+           xlab="Subscribed Status", ylab="Default Status",
+           shade = T, legend=T)
+```
+
+Observing the mosaic plot above, it appears Subscribed status and default status are independent.
+
+#### Mosaic Plot Between Subscribed status and Education Status:
+
+```{r}
+y.education.cont = xtabs(~subscribed+education, bank.2)
+```
+
+```{r}
+print(y.education.cont)
+```
+
+
+```{r}
+mosaic(x= y.education.cont, 
+           main="Subscribed and Education Status",
+           xlab="Subscribed Status", ylab="Education Status",
+           shade = T, legend=T)
+```
+
+According to the results of the mosaic plot, the variables subscribed status and education status appear to have a relationship. Based on the mosaic plot we could reject the assumption that subscribed status (y) and education status are independent, but caution would be needed given that the approximation fo the Chi-Squared test earlier may have been misleading. This will have to be taken into consideration for the models developed later.
+
+#### Mosaic Plot Between Subscribed Status and Previous.contact Variable:
+
+
+```{r}
+y.prev.contact.cont = xtabs(~subscribed+previous.contact, bank.2)
+```
+
+```{r}
+print(y.prev.contact.cont)
+```
+
+```{r}
+mosaic(x = y.prev.contact.cont, 
+           main="Subscribed and Previous Contact Status",
+           xlab="Subscribed Status", ylab="Previous Contact Status",
+           shade = T, legend=T)
+```
+
+The results form the mosaic plot demonstrate that there is some relationship between the variables of subscribed status (y) and previous.contact. In the context of these two variables, we can reject the null hypothesis that they are independent. Looking at the mosaic plot, far fewer persons who were previously contacted and did not subscribe to a term deposit as would be expected if the two variables maintained independence. Additionally, more people who were previously contacted and did subscribe to a term deposit than would be expected if the two variables maintained independence.
+
+# Modeling Results
+
+## Training, Validating and Testing Models for Statistical Learning
+
+11. Use at least one statistical learning technique (linear regression, K-Nearest Neighbors, logistic regression, decision trees, random forests) to model the outcome variable(s) that upu identified in Part II of the project as functions of the predictor.factor variables. Report a summary of your model(s) describing the qualityt of the model as well as hoe the predictors affect/correlate to the outcome(s) (for example, in linear regression, the estimates of coefficients show this correlation)
+
+## Logitstic Regression Model Composed All Variables From Research Question 2
+
+Relevant Features: emp.var.rate, loan, default status, education status, campaign, previous.contact
+
+Response variable: Subscription status (y)
+
+Note that Kappa is used as the metric for caret due to the imbalanced classes of the Subsciption status.
+
+```{r}
+bank.3 = bank.2 %>% dplyr::select(., emp.var.rate, loan, 
+                          default, education, campaign, 
+                          previous.contact, subscribed) %>% 
+  na.omit() %>%
+  mutate(., subscribed = factor(subscribed),
+         default = factor(default),
+         education = factor(education),
+         loan=factor(loan),
+         campaign = as.numeric(campaign))
+```
+
+
+
+
+```{r}
+set.seed(10)
+data.part.ind = createDataPartition(bank.3$subscribed, 
+                                    times = 1, p =0.7, list=FALSE)
+bank.3.train = bank.3[data.part.ind,] # Get the training data
+bank.3.test = bank.3[-data.part.ind,] # get the testing data
+bank.3.train.preproc = preProcess(bank.3.train, 
+                                  method =c("center","scale")) #Establishing
+# preprocessing transformations
+bank.3.train_preproc_convert = data.frame(
+  predict(bank.3.train.preproc, bank.3.train)) # Preprocessing
+bank.3.test_preproc_convert = data.frame(
+  predict(bank.3.train.preproc, bank.3.test)) # Preprocessing
+```
+
+
+```{r message = FALSE, warning = FALSE}
+set.seed(10)
+cluster_1 <- makeCluster(3)
+registerDoSNOW(cluster_1)
+all.rel.feat.glm_processing = train(
+  x = bank.3.train_preproc_convert[,-7],
+  y = bank.3.train_preproc_convert[,7],
+  #form = subscribed ~ .,
+  #data = bank.3.train_preproc_convert,
+  trControl = trainControl(method="cv", repeats = 10),
+  method = "glm",
+  family="binomial",
+  na.action=na.omit,
+  metric = "Kappa"
+)
+stopCluster(cluster_1)
+```
+
+```{r}
+all.rel.feat.glm_processing$results
+```
+
+
+
+```{r}
+all.rel.feat.glm_processing$finalModel
+```
+
+Next we take a look at the resulting summary for the model:
+
+```{r}
+summary(all.rel.feat.glm_processing$finalModel)
+```
+
+
+```{r}
+all.rel.feat.glm_predictions =predict(all.rel.feat.glm_processing$finalModel,
+                                      bank.3.test_preproc_convert[,-c(7)])
+all.rel.feat.glm_predictions = ifelse(all.rel.feat.glm_predictions >= 0.5, "yes", "no")
+```
+
+```{r warning=FALSE}
+confusionMatrix(factor(all.rel.feat.glm_predictions), 
+                factor(bank.3.test_preproc_convert[,c(7)]), 
+                positive = "yes", mode ="everything")
+```
+
+It can be observed that the logistic regression model performed horribly. This is possibly due to the massive class imbalance present within the dataset. The balanced accuracy is 0.5723, the specificity is 0.99, the positive predicted value is 0.71, but it is clearly observable that the sensitivity is 0.15 and the negative predicted value is roughly 0.89. This model would fail if deployed for practical use as it cannot determine from the test results the minority class of people who have subscribed in the data.
+
+Now we will take a look at the coefficients and their respective confidence intervals, the confidence intervals significance levels being 95%.
+
+```{r warning =FALSE}
+confidence_intervals.glm <- confint(all.rel.feat.glm_processing$finalModel)
+```
+
+
+```{r}
+print(confidence_intervals.glm)
+```
+
+The results of the confidence intervals demonstrate that the variables coefficients intercept, previous.contact1 and emp.var.rate.
+
+
+## Random Forest Model composed of All Variables from Research Question 2
+
+The next model to be built will be a random forest:
+
+```{r warning =FALSE}
+set.seed(10)
+
+cluster_1<- makeCluster(3)
+registerDoSNOW(cluster_1)
+random.forest.trained.1 = train(
+  x = bank.3.train_preproc_convert[,-7],
+  y = bank.3.train_preproc_convert[,7],
+  trControl = trainControl(method="cv", 
+                           number=10,
+                           search = "random"),
+  method = "rf",
+  na.action = na.omit,
+  tuneLength = 20,
+  metric="Kappa"
+)
+stopCluster(cluster_1)
+```
+
+Now getting the results fo the random forest model:
+
+```{r}
+print(head(random.forest.trained.1$results))
+```
+
+```{r}
+print(random.forest.trained.1$bestTune)
+```
+
+It can be observed that the random forest model with the best tuning has the mtry parameter set to 2, or the quantity of features taken for possible evaluation for a branch to divide.
+
+Now testing the random forest model:
+
+
+```{r warning = FALSE}
+rand.forest_predictions <- predict(random.forest.trained.1$finalModel,bank.3.test_preproc_convert[,-c(7)])
+random_forest_conf.matrix<- 
+  confusionMatrix(factor(rand.forest_predictions), 
+                  factor(bank.3.test_preproc_convert[,7]), 
+                  positive = "yes", mode = "everything")
+```
+
+```{r}
+print(random_forest_conf.matrix)
+```
+
+It can be observed that the random forest model performed better than logistic regression, although not extremely better. This is possibly due to the massive class imbalance present within the dataset. The balanced accuracy is 0.59, the specificity is 0.98, the positive predicted value is roughly 0.62, but it is clearly observable that the sensitivity is an estimated 0.19 and the negative predicted value is an estimated 0.90 value. It is appears to be somewhat better for classification of the dataset as that of the previous logistic regression model considering increased balanced accuracy and sensitivity.
+
+Below are the feature importance measures from the random forest model:
+
+```{r}
+var.imp.measures <- 
+  row.names(varImp
+            (random.forest.trained.1$finalModel))# Getting the names of features
+variable_importance.dat<- 
+  data.frame(var.imp.measures,
+             varImp(random.forest.trained.1$finalModel)) # putting it all
+# togethe in a single dataframe
+row.names(variable_importance.dat) = NULL #Eliminating row names
+
+```
+
+```{r}
+print(variable_importance.dat)
+```
+
+
+```{r}
+variable_importance.dat %>%
+  ggplot(aes(x=var.imp.measures, y=Overall)) +
+  theme_bw() + 
+  geom_bar(stat = "identity") +
+  labs(title = "Variable Importance from Random Forest",
+       x = "Variable Name", y = "Relative Importance")
+```
+
+We can see that similar to the logistic regression model, that the variable emp.var.rate has been given the most importance by the random forest model followed by previous.contact. Default was the variable that was given near 0 importance in weight in contrast to the other variables.
+
+## Predictors for the Logistic Regression and Random Forest Models
+
+It appears that the predictors utilized for the models were insufficient the context of this data for the models used, taking into account the models were being trained on highly imbalanced data. Based on the results though, emp.var.rate and previous.contact were the features given the most significance by the logistic regression and random forest models. For future work the emp.var.rate and previous.contact variables could be retained to see if they contributes to later models that are trained and tested or not. Due to the imbalanced nature of the dataset, the metric Kappa was chosen instead of accuracy alone for evaluating the best fitted cross validation model. This slightly improved overall performance.
+
+## Adaboost Model Composed of All Relevant Variables from Research Question 2
+
+Next is building a boosting model:
+
+```{r}
+set.seed(10)
+cluster_1<- makeCluster(3)
+registerDoSNOW(cluster_1)
+ada.grid = expand.grid(method =c("Adaboost.M1", "Real adaboost"), nIter=c(10:100))
+adaboost.trained.1 = train(
+     x = bank.3.train_preproc_convert[,-7],
+     y = bank.3.train_preproc_convert[,7],
+     trControl = trainControl(method="cv", 
+                             number=10),
+     method = "adaboost",
+     na.action = na.omit,
+     tuneGrid = ada.grid,
+     metric="Kappa"
+ )
+stopCluster(cluster_1)
+```
+
+```{r}
+adaboost.trained.1$results %>%
+  arrange(desc(Kappa,Accuracy)) %>%
+  head(5)
+```
+
+
+
+```{r}
+adabost.classif.predict <- predict(adaboost.trained.1,bank.3.test_preproc_convert[,-7])
+adaboost_classif_conf.matrix<- 
+  confusionMatrix(factor(adabost.classif.predict), 
+                  factor(bank.3.test_preproc_convert[,7]), 
+                  positive = "yes", mode = "everything")
+```
+
+```{r}
+print(adaboost_classif_conf.matrix)
+```
+
+Using the Adaboost model with hyperparameters ```method = 'Adaboost.M1'```, and ```nIter = 41``` (where ```nIter``` refers to the number of trees sequentially built) there is a noticable improvement of the balanced accuracy on the dataset. The balanced accuracy for the Adaboost tree model is 0.64. the sensitivity now 0.36, the specificity is 0.92, the positive predicted value is 0.91, and the negative predicted value is 0.91. This model has performed overall better on the test datset for the balanced accuracy and specificity than that of the random forest and logistic regression model. The Adaboost tree model, however, can be prone to overfitting similar to other boosting methods. As a result, we should be cautious to proceed with other methods before relying on a boosting method to achieve high performance from trained models and produce viable models that can later be deployed. Other machine learning algorithms can be explored and more robust methods can be developed before placing heavy reliance on boosting methods.
+
+Below is the variable importance for the Adaboost tree model:
+
+```{r}
+adaboost.var.importance <- varImp(adaboost.trained.1)
+adaboost.measurements <- adaboost.var.importance$importance
+adaboost.var.imp.measures <- 
+  row.names(adaboost.measurements)# Getting the names of features
+adaboost.variable_importance.dat<- 
+  data.frame(adaboost.var.imp.measures,
+             adaboost.measurements) # putting it all
+# together in a single dataframe
+row.names(adaboost.variable_importance.dat) = NULL #Eliminating row names
+```
+
+```{r}
+print(adaboost.variable_importance.dat)
+```
+
+```{r}
+adaboost.variable_importance.dat %>%
+  ggplot(aes(x=adaboost.var.imp.measures, y=no)) +
+  theme_bw() + 
+  geom_bar(stat = "identity") +
+  labs(title = "Variable Importance from Adaboost Tree for Not Subscribed Clients",
+       x = "Variable Name", y = "Relative Importance")
+```
+
+```{r}
+adaboost.variable_importance.dat %>%
+  ggplot(aes(x=adaboost.var.imp.measures, y=yes)) +
+  theme_bw() + 
+  geom_bar(stat = "identity") +
+  labs(title = "Variable Importance from Adaboost Tree for Subscribed Clients",
+       x = "Variable Name", y = "Relative Importance")
+```
+
+In the Adaboost tree model, similar to the random forest model before it, emp.var.rate is given the most weight in regard to variable importance followed by previous.contact. There has been a slight shift in the variable importance of campaign and education in contrast to the random forest, where the variable campaign has slightly more weight relative to other variables for the Adaboost tree model.  Overall, the Adaboost tree model has reaffirmed the signidicance fo the variables emp.var.rate and previous.contact for model performance.
+
+# Conclusion
+
+## Research Question 1
+
+For research question 1, it appears that job status and default status may have a relationship in the data, but marital status and default status do not seem to be independent. Thus, we reject the null hypothesis in the context of this data that default status is independent of job status and marital status.
+
+## Research Question 2
+
+For research question 2, the two models (logistic regression and random forest) that were employed for the predicting y, or subscribed status, using the predictors emp.var.rate, loan, previous.contact, default, education, campaign and previous.contact were not sufficient to be deployed practically. For future work the number of predictors may be expanded or additional machine learning algorithms may be introduced to be able to train and test additional models. Another possibility is the inclusion of more data, however, acquiring more data can be an expensive endeavor in itself.
+
+## Limitations In Dataset
+
+The dataset has a noticeable class imbalance for the response variables for Research Questions 1 and 2. This can lead to a number of issues when training models such as the models being heavily trained to primarily identify the majority class. Likewise, missing values in Research Question 1 response variable can be observed to have led to less informative results for the broader population of potential clients who might or might not subscribe to the bank's term deposit product. More complete instances for the data would potentially assist with building more successful models.
+
+## Future Work
+
+For building additional models, more algorithms can be explored. Such algorithms as the Naive Bayes algorithm, potentially the support vector machine algorithm, neural networks, and other algorithms as well. Preferably, algorithms that can address the class imbalance while limiting other issues such as overfitting would be preferred.
+
+Additionally, the library H2O could be used to be able to develop models that are capable of being actively deployed in a compatible cyber ecosystem after successful trainind, validation and testing. Doing so would involve mode computational resources that would also have to be addressed to build models in a time and resource efficient manner.
+
+Ensemble techniques can be explored as well at a later date. Using ensemble methods may present new opportunities and benefits that could not be seen in the base models alone. Once again, if boosting models were to be further explored they would have to be cautiously developed or else they may run into severe overfitting issues that jeopardize the performance of the model.
+
+# Acknowledgements
+
+Thanks to the North Carolina Agricultural and Technical State University Applied Science and Technology Program for accepting me as a PhD student this semester.
+
+Thanks to the UCI Machine Learning Repository for storing and maintaining this data.
+
+Thanks to S. Moro, P. Cortez and P. Rita for their original work and allowing for UCI Machine Learning Repository to store and maintain the data.
+
+Thanks to Dr. Mostafa for an excellent STAT 707: Introduction to Data Science course this semester and an excellent AST 992: Doctoral Seminar in Data Science and Analytics.
+
+Thanks to Dr. Tang, Dr. Kim, and Dr. Mostafa for excellent courses this semester and workshops this semester that have contributed to the growth of my overall knowledge.
+
+Thanks to the classmates that I have had this semester and their encouragement. Thanks to them for providing their experience and thanks for them bringing new knowledge to the discussion each day.
+
+Thanks to the many who have worked on R, are working on R and have provided documentation, workshops, tutorials etc. for R that has given me additional knowledge and tools to employ for this project.
+
+# References
+
+## Data Source
+
+[Moro et al., 2014] S. Moro, P. Cortez and P. Rita. A Data-Driven Approach to Predict the Success of Bank Telemarketing. Decision Support Systems, Elsevier, 62:22-31, June 2014.
+
+Dua, D. and Graff, C. (2019). UCI Machine Learning Repository [http://archive.ics.uci.edu/ml]. Irvine, CA: University of California, School of Information and Computer Science. 
