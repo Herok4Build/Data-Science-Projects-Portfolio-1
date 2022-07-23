@@ -1,0 +1,1290 @@
+---
+title: "Predictive Modeling for Determining Potential Subscriptions for a Term Deposit Based on Predictors from Bank Marketing Dataset"
+author: "Thomas Johnson III"
+date: "12/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message = FALSE, warning=FALSE}
+library(easypackages)
+libraries("readr","tidyverse",
+          "viridis", "corrplot",
+          "GGally", "caret",
+          "caret", "naivebayes",
+          "MASS", "boot")
+```
+
+# Objective
+
+The aim of this work is to attempt to build a predictive model to determine if a potential client was likely to subscribe to a term deposit (denoted as y in the original dataset) based on the predictors of: age, housing, contact, campaign, previous, poutcome, cons.price.idx, and cons.conf.idx. To do so the data will be cleaned by locating and removing instances with missing values. Afterwards, the data will be partitioned into training and testing subsets. The predictive models to me used are a GLM, and Naive Bayes models. The data can be located at <https://archive.ics.uci.edu/ml/datasets/bank+marketing>. The data was originally used in the work of [Moro et al., 2014] and was made available publicly in the UCI Machine Learning Repository (<https://archive.ics.uci.edu>).
+
+## Hypotheses
+
+We use the balanced accuracy here to evaluate the performance of the generated models.
+
+$H_{0}$: No model built with some combination of the predictors age, housing, contact, campaign, previous, poutcome, cons.price.idx, and cons.conf.idx will be better than guessing.
+
+$H_{0}$: At least one model built with some combination of the predictors age, housing, contact, campaign, previous, poutcome, cons.price.idx, and cons.conf.idx will be better than guessing.
+
+# Background
+
+The use of predictive models have expanded into many sectors and of cyberinfrastucture and likewise the economy. Predictive models can provide novel possibilities to explore when it comes to the marketing resources and methodologies of an enterprise. There has been a surging interest for larger enterprises to adapt predictive models as a means to further anticipate the actions or sentiments of their markets (Kotras, 2020). One particular path in this can be traced to the second decade of the 1900s, where the aim of having marketing methods uniquely adapted for the potential customer were first being promoted (Kotras, 2020). While ensemble subsets of predictive models boast increased effectiveness in the task at hand, more basic models will hold favor due to clarity when investigating basic models (Kotras, 2020). Nonetheless, ensemble models are being pushed as well to be occupants in the toolset of predictive modeling as seen in (Alves Werb and Schmidberger, 2021). With more data being available due to electronics the efforts of (Narsimlu and Kumar, 2021) explore the usage of a more basic type of predictive model for the purpose of minimizing the overall expenditures incurred by marketing efforts. What previous works have shown is that the presence of predictive modeling is going to continue to be altered as well as alter marketing toolsets.
+
+# Methodology
+
+The first predictive model to be used is logistic regression. Logistic regression will evaluate the respective odds of response variable on its own, then will reevaluate the odds of the response variable via the independent variables that were previously excluded (Ranganathan, Pramesh, and Aggarwal, 2017). The adjusted odds ratio is attained using exponentials with the obtained odds ratios, which can differ in interpretation amongst qualitative and quantitative independent variables (Ranganathan, Pramesh, and Aggarwal, 2017). Qualitative variables will have adjusted odds ratios that are retained using the reference level in contrast to the other levels, while quantitative variables have adjusted odds ratios tied to each increment of the provided measure of the quantitative variable (Ranganathan, Pramesh, and Aggarwal, 2017).
+
+Formulas for logistic regression model:
+
+-   Simple:
+
+$y(x) = \beta_{0} + \beta_{1}x_{1}$ where $x$ is a one-dimensional column matrix (David et al., 2000).
+
+-   Multiple:
+
+$y(x) = \beta_{0} + \beta_{1}x_{1} + \beta_{2}x_{2}+ ... + \beta_{p}x_{p}$ where $x$ is an assortment of one-dimensional column vectors associated with $p$ predictors (David et al., 2000).
+
+Logistic regression predictive model is highly strengthened and weakened by the independent variables used (Ranganathan, Pramesh, and Aggarwal, 2017). One such predicament is choosing independent variables that lack any real impact or value for the response variable (Ranganathan, Pramesh, and Aggarwal, 2017). A second is that the logistic regression model will degrade with regard to performance when there exists multicollinearity amongst the independent variables (Ranganathan, Pramesh, and Aggarwal, 2017). Logistic regression models do pose as a much more appealling model when taking into account that breaking down the model into its relevant pieces is not as arduous a task as other models (Alves Werb and Schmidberger, 2021). Logistic Regression can be overall more favorable when attempting to examine the effectiveness of the predictive model (Alves Werb and Schmidberger, 2021).
+
+The second model is the Naive Bayes Model. The Naive Bayes Model is based on Bayes Theorem, meaning the Naive Bayes model grounded on the presumption of independent variables lack dependencies with a provided class outcome (Rish, 2001). Naive Bayes is found to excel in two scenarios (Rish, 2001). The first is when predictors have no dependencies with one another (Rish, 2001). The second is when predictors happen have a function based connection with one another (Rish, 2021). Outside of these two the Naive Bayes model degrades in performance.
+
+Formula for Naive Bayes:
+
+$\text{Naive Bayes} (\text{Input}) = \frac{P(D = +)}{P(D = -)} \prod^{n}_{j = 1} \frac{P(x_{j}|D = +)}{P(x_{j}|D = -)}$ in which the measure of the predictor $X_{j}$ is $x_{j}$ with $D$ being the qualitative response (Zhang, 2004). The $+$ and $-$ are the true and false cases of the variable $D$ (Zhang, 2004).
+
+# Data
+
+Getting the total dimensions of the original data. The index X and the predictor duration are being removed. The predictor duration is specified to be too highly correlated with y to use (Dua and Graff, 2019)
+
+```{r results="hide"}
+#Loading in the data
+bank_load <- read.csv("./bank_dataset_without_semicolons.csv") %>%
+  dplyr::select(., -c(X, duration))
+```
+
+```{r results="hide"}
+bank_data <- bank_load %>% 
+  dplyr::select(., age, housing, contact, campaign, previous,
+         poutcome, cons.price.idx, cons.conf.idx,y)
+```
+
+```{r echo =FALSE}
+print(dim(bank_load))
+```
+
+So there are 4119 instances and 21 variables in the original data.
+
+## Source
+
+The data was obtained via the UCI Machine Learning Repository. It was originally acquired from (Moro et al.'s) work in the year 2014. The data was acquired from straightforward endeavors of a financial institution in Portugal to determine if potential clientele accept the subscription offer tied to the term deposit product (Dua and Graff, 2019).
+
+## Selected Variables
+
+### Predictors
+
+The selected predictors are: age, housing, contact, campaign, previous, poutcome, cons.price.idx, and cons.conf.idx
+
+-   age: The Age of the potential client (Dua and Graff, 2019). Quantitative in nature (Dua and Graff, 2019).
+
+-   housing: Does the potential client possess a home loan (Dua and Graff, 2019). Qualitative in nature (Dua and Graff, 2019).
+
+-   campaign: Quantity of attempts to reach out to a client (Dua and Graff, 2019). Quantitative in nature (Dua and Graff, 2019).
+
+-   contact: How the client was reached out to (Dua and Graff, 2019). Qualitative in nature (Dua and Graff, 2019).
+
+-   previous: How many times the client was reached out preceding this marketing campaign (Dua and Graff, 2019). Quantitative in nature (Dua and Graff, 2019).
+
+-   poutcome: Results of the preceding marketing campaign for the client (Dua and Graff, 2019). Qualitative in nature (Dua and Graff, 2019).
+
+-   cons.price.idx: The Consumer Price Index which was measured each month (Dua and Graff, 2019). Quantitative in nature (Dua and Graff, 2019).
+
+-   cons.conf.idx: The consumer confidence index which was measured monthly (Dua and Graff, 2019). Quantitative in nature (Dua and Graff, 2019).
+
+### Response
+
+y (to be renamed to sub_term): Did the client accept the subsciption for the proposed term deposit (Dua and Graff, 2019). Qualitative in nature (Dua and Graff, 2019).
+
+## Data Preprocessing
+
+Most missing values are marked as **unknown** (Dua and Graff, 2019). This could be due to a number of reasons from the inability to collect said information to the refusal of the client to provide such information. Missing values will be converted to `NA` to be removed with their respective instances from the dataset.
+
+### Missing Values
+
+Getting the total fo the missing values within the data:
+
+```{r }
+bank_data[bank_data=="unknown"]<- NA
+bank_data[bank_data==""]<- NA
+bank_data %>%
+  summarise_all(funs(sum(is.na(.))))
+```
+
+We can observe that there are 105 missing values within the housing variable. In removing the instances with these missing values will leave 4014 instances for analysis and predictive modeling.
+
+### Variables
+
+```{r results="hide"}
+bank_data = bank_data %>%
+  rename(sub_term = "y")
+```
+
+The qualitative variables of housing, contact, poutcome and sub_term are going to be converted to factors for easier processing within R.
+
+```{r results="hide"}
+options(digits=2)
+bank_data = bank_data %>% 
+  na.omit(.) %>%
+  mutate(housing = factor(housing),
+         contact = factor(contact),
+         poutcome = factor(poutcome),
+         sub_term = factor(sub_term),
+         previous = as.ordered(previous))
+
+bank_data.preserve = bank_data %>% 
+  na.omit(.) %>%
+  mutate(housing = factor(housing),
+         contact = factor(contact),
+         poutcome = factor(poutcome),
+         sub_term = factor(sub_term),
+         previous = as.ordered(previous))
+```
+
+The quantitative variables should be suitable for the logistic regression and Naive Bayes models as they are.
+
+### Descriptive Statistics
+
+#### Qualitative
+
+##### Housing
+
+Getting the count and percentage for housing:
+
+```{r results="hide"}
+
+quant.var.descript.housing = bank_data %>% 
+  dplyr::select(., housing) %>% 
+  group_by(housing) %>% 
+  count() %>%
+  rename(freq = "n") %>%
+  mutate(percentage = freq/nrow(bank_data) *100)
+```
+
+```{r }
+print(quant.var.descript.housing)
+```
+
+We can observe from the output of the table above that 54 percent of the clients possess a home loan. The remaining 46 percent do not.
+
+##### Contact
+
+Getting the count and percentage for contact:
+
+```{r results="hide"}
+quant.var.descript.contact = bank_data %>% 
+  dplyr::select(., contact) %>% 
+  group_by(contact) %>% 
+  count() %>%
+  rename(freq = "n") %>%
+  mutate(percentage = freq/nrow(bank_data) * 100)
+```
+
+```{r }
+print(quant.var.descript.contact)
+```
+
+We can observe from the table above that 65 percent of clients were reached out to via a cellular device. The remaining 35 percent were reached out o via a telephone.
+
+##### Poutcome
+
+Getting the count and percentage for poutcome:
+
+```{r results="hide"}
+quant.var.descript.poutcome = bank_data %>% 
+  dplyr::select(., poutcome) %>% 
+  group_by(poutcome) %>% 
+  count() %>%
+  rename(freq = "n") %>%
+  mutate(percentage = freq/nrow(bank_data) * 100)
+```
+
+```{r }
+print(quant.var.descript.poutcome)
+```
+
+The majority of clients within the dataset have not been contacted previously preceding the marketing campaign the data was collected for as denoted by the **nonexistent** value being the case for 85.6 percent of the clients and a clear majority. The percentage of clients who declined the product are denoted by the **failure** value being the case for 10.9 percent of the clients. The percentage of clients who did accept the product proposal were 3.5 percent which is notably the minority.
+
+##### Sub_term
+
+Getting the count and percentage for sub_term:
+
+```{r results="hide"}
+quant.var.descript.sub_term = bank_data %>% 
+  dplyr::select(., sub_term) %>% 
+  group_by(sub_term) %>% 
+  count() %>%
+  rename(freq = "n") %>%
+  mutate(percentage = freq/nrow(bank_data) * 100)
+```
+
+```{r }
+print(quant.var.descript.sub_term)
+```
+
+Looking at the response variable which is the subscription status of the clients, we can observe that a majority of the clients, or 89 percent, declined the offer of the subscription to the term deposit. This means that 11 percent of clients that did accept the subscription offer are in the minority. This demonstrates a severe imbalance in the classes of the response variable that will have to be taken into account when evaluating models' performance.
+
+#### Checking Correlation Between Campaign, Cons.price.idx, Cons.conf.idx
+
+Getting correlations between the quantitative variables:
+
+```{r echo =FALSE}
+ggpairs(bank_data[,c(1,4,7:8)])
+```
+
+None of the variables of age, campaign, cons.price.idx, cons.conf.idx seem to be highly correlated with one another.
+
+#### Quantitative
+
+##### Age, Campaign, Cons.price.idx, Cons.conf.idx
+
+Calculating descriptive statistics for the quantitative variables of age campaign, cons.price.idx, and cons.conf.idx:
+
+```{r results="hide"}
+#Calculating min, mean, standard deviation, max, median
+quantit.descipt = bank_data %>% 
+  dplyr::select(.,age, campaign, cons.price.idx, cons.conf.idx) %>%
+  summarise_all(funs(min,median,max,mean,sd),
+                na.rm = T)
+#Calculating Q1
+quant.descript.q1 = bank_data %>% 
+  dplyr::select(.,age, campaign, cons.price.idx, cons.conf.idx) %>%
+  summarise_all(funs(quantile),
+                probs = 0.25)
+#Calculating Q3
+quant.descript.q3 = bank_data %>% 
+  dplyr::select(.,age, campaign, cons.price.idx, cons.conf.idx) %>%
+  summarise_all(funs(quantile),
+                probs = 0.75)
+
+#Transforming into a neat dataframe:
+quantit.descipt <- data.frame(quantit.descipt,
+           quant.descript.q1,
+           quant.descript.q3)
+quantit.descipt = data.frame(t(quantit.descipt[,1:4]),
+           t(quantit.descipt[,5:8]),
+           t(quantit.descipt[,9:12]),
+           t(quantit.descipt[,13:16]),
+           t(quantit.descipt[,17:20]),
+           t(quantit.descipt[,21:24]),
+           t(quantit.descipt[,25:28]))
+names(quantit.descipt) <- c("min", "median", "max",
+                            "mean", "stand_dev", "Q1",
+                            "Q3")
+row.names(quantit.descipt) <- c("age",
+                                "campaign", "cons.price.idx",
+                                "cons.conf.idx")
+#Reorganizing the columns:
+quantit.descipt = quantit.descipt[,c("min", "Q1", "median",
+                   "Q3", "max", "mean",
+                   "stand_dev")]
+```
+
+The table for the quantitative variables is below:
+
+```{r}
+print(quantit.descipt)
+```
+
+We can observe the that the variables of age, campaign, cons.price.idx, and cons.conf.idx have means and medians that are within one standard deviation of one another. Average age for clients in the data is 40.1 years with a standard deviation of 10.34 years. The mean of campaign is 2.5 days and a standard deviation of 2.58 days. The mean of cons.price.idx is 93.6 and a standard deviation of 0.58. The mean of the consumer confidence index is -40.5 and a standard deviation of 4.60.
+
+##### Previous
+
+Descriptive statistics for previous:
+
+```{r results="hide"}
+quant.var.descript.previous = bank_data %>% 
+  dplyr::select(., previous) %>% 
+  group_by(previous) %>% 
+  count() %>%
+  rename(freq = "n") %>%
+  mutate(percentage = freq/nrow(bank_data) * 100)
+```
+
+```{r }
+print(quant.var.descript.previous)
+```
+
+Due to the variable previous having so few unique values, it can be more infromative to provide descriptive statistics on the count (frequency in the table above) and percentages of each unique value. It is clear form the table that 85.63 percent of potential clients have not been previously not been reached out to. Additionally, there is a noticeable decrease in the percentage fo clients in the dataset that have reached out to 1 or more times preceding the marketing campaign versus the clients who were not contacted at all.
+
+## Visuals With Respect to the Response Variable Sub_term
+
+### Age
+
+It should be noted that the sub_term response has a class imbalance is present for the subscription status in regard to a term deposit response variable.
+
+```{r results="hide"}
+sub_term.to.age.1 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = age)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(title = "Subscription Status and Age",
+       x = "Subscribed to Term Deposit",
+       y="Age") + 
+  scale_fill_viridis(discrete = T) 
+
+sub_term.to.age.2 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = age)) +
+  geom_violin(aes(fill = sub_term)) +
+  theme_bw() +
+  labs(title = "Subscription Status and Age",
+       x = "Subscribed to Term Deposit",
+       y="Age") + 
+  scale_fill_viridis(discrete = T) 
+  
+```
+
+```{r}
+print(sub_term.to.age.1)
+print(sub_term.to.age.2)
+```
+
+There does not seem to be much of a difference between the distributions of age for clients who did accept the subscription for the term deposit and clients who declined. The inter-quartile range for the clients that accepted the subscription is larger. The third quartile is larger for the box plot of clients who accepted to the subscription and the first quartile for clients who accepted the subscription is smaller in contrast to the box plot for clients that did not accept the subscription. There is a broader range of values for possible outliers for higher values of age for clients who declined the subscription than the clients who accepted the subscription.
+
+From the violin plots, we can see that most clients are under roughly 609 years of age.
+
+### Housing
+
+```{r results="hide"}
+sub_term.to.home <- bank_data %>%
+  group_by(housing, sub_term) %>%
+  count(.) %>%
+  rename(.,freq = "n") %>%
+  ggplot(aes(x = housing, y = freq, fill = sub_term)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(title = "Subscription Status and Home Loan Status",
+       x = "Home Loan",
+       y="Frequency") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r }
+print(sub_term.to.home)
+```
+
+The above plot demonstrates that there does not seem to be many differences between the sub_term variable distributions with respect to the home loan status of clients.
+
+### Housing
+
+```{r results="hide"}
+sub_term.to.contact <- bank_data %>%
+  group_by(contact, sub_term) %>%
+  count(.) %>%
+  rename(.,freq = "n") %>%
+  ggplot(aes(x = contact, y = freq, fill = sub_term)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(title = "Subscription Status and Contact Method",
+       x = "Contact",
+       y="Frequency") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r }
+print(sub_term.to.contact)
+```
+
+From the plot above, it is observable that majority of clients were contacted the via the usage of a **cellular** device versus a **telephone**. Additionally, more people who accepted the offer to the subscription were contacted through a **cellular** device. Considering the original source of the data was recorded to be published in 2014, The above distribution may be a result of the increased popularity of mobile devices such as cell phones over telephones.
+
+### Campaign
+
+```{r results="hide"}
+sub_term.to.campaign.1 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = campaign)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(title = "Subscription Status and Campaign Count",
+       x = "Subscription to the Term Deposit",
+       y="Campaign Count")
+
+sub_term.to.campaign.2 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = campaign, fill=sub_term)) +
+  geom_violin() +
+  theme_bw() +
+  labs(title = "Subscription Status and Campaign Count",
+       x = "Subscription to the Term Deposit",
+       y="Campaign Count") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r }
+print(sub_term.to.campaign.1)
+print(sub_term.to.campaign.2)
+```
+
+The main difference present in the distributions from observing the box plots and violin plots is that range of the distribution of attempts to communicate with clients who declined the subscription offer is larger than the that of the distribution of attempts to reach out to clients who accepted the subscription offer.
+
+### Previous
+
+```{r results="hide"}
+sub_term.to.previous <- bank_data %>%
+  group_by(previous, sub_term) %>%
+  count(.) %>%
+  rename(.,freq = "n") %>%
+  ggplot(aes(x = previous, y = freq, fill = sub_term)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(title = "Subscription Status and Previous Contact Attempts",
+       x = "Previous Contact Count",
+       y="Frequency") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r }
+print(sub_term.to.previous)
+```
+
+Majority of clients were not previously contacted. Additionally, the number of clients that have been reached out to preceding the marketing campaign drops rapidly as the previous variable increases in value.
+
+### Poutcome
+
+```{r results="hide"}
+sub_term.to.poutcome <- bank_data %>%
+  group_by(poutcome, sub_term) %>%
+  count(.) %>%
+  rename(.,freq = "n") %>%
+  ggplot(aes(x = poutcome, y = freq, fill = sub_term)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(title = "Subscription Status and Previous Contact Result",
+       x = "Previous Contact Result",
+       y="Frequency") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r }
+print(sub_term.to.poutcome)
+```
+
+Most clients have not been contacted preceding the marketing campaign, meaning most have the **nonexistent** poutcome values. Of those clients who were, clients that declined (marked as **failure**) had a larger proportion of clients who declined the subscription offer of this marketing campaign. Clients that accepted previous offers (marked as **success**) have a higher proportion of clients who accepted the subscription offer of the current marketing campaign.
+
+### Cons.price.idx
+
+```{r results="hide"}
+sub_term.to.cpi.1 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = cons.price.idx)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(title = "Subscription Status and Consumer Price Index",
+       x = "Subscription to the Term Deposit",
+       y="Consumer Price Index")
+
+sub_term.to.cpi.2 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = cons.price.idx, fill=sub_term)) +
+  geom_violin() +
+  theme_bw() +
+  labs(title = "Subscription Status and Consumer Price Index",
+       x = "Subscription to the Term Deposit",
+       y="Consumer Price Index") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r }
+print(sub_term.to.cpi.1)
+print(sub_term.to.cpi.2)
+```
+
+The most noticeable distinctions for the classes of subscription response variable as that the consumer price index median and first quartile values are are higher for the **no** class. For the subscribed status **no** class distribution, the consumer price index appears to be skewed to the right. For subscribed status **yes** class the distribution seems to be evenly distributed.
+
+### Cons.conf.idx
+
+```{r results="hide"}
+sub_term.to.cci.1 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = cons.conf.idx)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(title = "Subscription Status and Consumer Confidence Index",
+       x = "Subscription to the Term Deposit",
+       y="Consumer Confidence Index")
+
+sub_term.to.cci.2 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = cons.conf.idx, fill=sub_term)) +
+  geom_violin() +
+  theme_bw() +
+  labs(title = "Subscription Status and Consumer Confidence Index",
+       x = "Subscription to the Term Deposit",
+       y="Consumer Confidence Index") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r}
+print(sub_term.to.cci.1)
+print(sub_term.to.cci.2)
+```
+
+For the **no** class distribution, there distribution is heavily skewed left. There is a smaller inter-quartile range for the **no** class distribution. The **yes** class distribution is slightly left skewed.
+
+# Analysis
+
+## Language and Packages
+
+The R programming language (version 4.1.1) language was used for this project. The following packages were used: "readr" (version 2.0.1),"tidyverse" (version 1.3.1), "viridis" (version 0.6.1), "corrplot" ( version 0.92), "GGally" (version 2.1.2), "caret" (version 6.0-90), "naivebayes" (version 0.9.7), "MASS" (version 7.3-54), "easypackages" (version 0.1.0), "dplyr" (version 1.0.7), "ggplot2" (version 3.3.5), "boot" (1.3-28). The R scripting language is tuned for work particularly in data science and statistics. As for the packages, readr is used for reading external files. Tidyverse and dplyr are used for manipulating the structures of data particularly dataframes, tables and matrices. The viridis package is for colors that easier to differentiate for matters concerning color-blindness. Corrplot is used for drawing correlation plots between variables. GGally is a library for rapidly deploying numerous plots based on inputted variables. Caret is library dedicated to predictive modeling applications and toolsets. Naivebayes is a library for the naivebayses model. MASS is a library containing various modeling and data tools. Easypackages is a library that allows for other libraries to be loaded in a single function. GGplot2 is a library based on the grammar of graphics and is used to model data. The boot library is used for bootstrapping applications and other resampling methods.
+
+## Models
+
+```{r}
+#Function to extract the relevant metrics from the confusion matrix.
+extract_conf_matrix<-function(conf_matrix_obj){
+  overall.matrix <- as.matrix(conf_matrix_obj, what="overall")
+  classes.matrix <- as.matrix(conf_matrix_obj, what="classes")
+  metrics <- c(overall.matrix[1], overall.matrix[2], classes.matrix[1], classes.matrix[2],
+               classes.matrix[3], classes.matrix[4], classes.matrix[7], classes.matrix[11])
+  names(metrics) <- c("Accuracy","Kappa", "Sensitivity", "Specificity", "PPV", "NPV", "F1", "Balanced accuracy")
+  metrics_data <- t(as.matrix(metrics))
+  metrics_data <- data.frame(metrics_data)
+  return(metrics_data)
+}
+```
+
+### Data Partitioning
+
+```{r}
+set.seed(9)
+training_bank_index = createDataPartition(bank_data$sub_term, times = 1, p= 0.7, list = FALSE)
+bank_data_train = bank_data[training_bank_index,]
+bank_data_test =bank_data[-training_bank_index,]
+```
+
+### Logistic Regression
+
+First we will build a base logistic regression model with all predictors, then utilize BIC to get the best logistic regression model.
+
+```{r results = "hide"}
+bank_base_log_regress = glm(sub_term~., bank_data_train, family = "binomial")
+```
+
+Getting the summary for the model:
+
+```{r results = "hide"}
+summary(bank_base_log_regress)
+```
+
+We will get the confidence interval at the 95% significance level as well:
+
+```{r warning=FALSE, results = "hide", message = FALSE}
+confint(bank_base_log_regress)
+```
+
+Observing the confidence intervals, we see that the coefficients of intercept, age, contacttelephone, campaign, previous.L, previous\^6, poutcomesuccess, and cons.conf.idx are significant.
+
+Initiating BIC:
+
+```{r results = "hide"}
+set.seed(11)
+bank_step_log_regress =stepAIC(bank_base_log_regress,
+                               diraction = "both", k = log(7))
+```
+
+```{r results = "hide"}
+formula(bank_step_log_regress)
+```
+
+Only cons.price.idx and housing were dropped. We get the summary for the model:
+
+```{r results = "hide"}
+summary(bank_step_log_regress)
+```
+
+and the confidence interval at the 95% significance level of the coefficients:
+
+```{r warning = FALSE, results = "hide", message =FALSE}
+confint(bank_step_log_regress)
+```
+
+The statistically significant coefficients are the age, contacttelephone, campaign, previous.L, previous\^6 and poutcomesuccess and cons.conf.idx. Removing cons.price.idx from the training and test data:
+
+```{r}
+bank_data_train = bank_data_train[,-c(2,7)]
+bank_data_test = bank_data_test[,-c(2,7)]
+```
+
+```{r warning = FALSE, results = "hide"}
+set.seed(12)
+bank.glm.ten.fold = train(
+  x = bank_data_train[,-c(7)],
+  y = bank_data_train[,c(7)],
+  method="glm",
+  metric = "Kappa",
+  trControl = trainControl(method = "cv",number = 10,
+                           search = "random"),
+  tuneLength = 10,
+  family = "binomial"
+)
+```
+
+Getting the results of the best model:
+
+```{r results = "hide"}
+bank.glm.ten.fold$results
+```
+
+Getting the best model, its predictions and confusion matrix:
+
+```{r warning = FALSE, results="hide"}
+# Getting the predictions of the GLM from the probabilities
+best.glm = bank.glm.ten.fold$finalModel
+best.glm.probabilties =predict.glm(best.glm, bank_data_test[,-c(7)], type = "response")
+best.glm.predictions = ifelse(best.glm.probabilties >= 0.5, "yes", "no")
+glm.conf.matrix = confusionMatrix(factor(best.glm.predictions), factor( bank_data_test[,c(7)]), positive="yes", mode="everything")
+best.glm.performance = extract_conf_matrix(glm.conf.matrix)
+```
+
+### Naive Bayes
+
+Constructing the model:
+
+```{r warning = FALSE, message = FALSE, results="hide"}
+set.seed(11)
+bank.nb.ten.fold = train(
+  x = bank_data_train[,-c(7)],
+  y = bank_data_train[,c(7)],
+  method="naive_bayes",
+  metric = "Kappa",
+  trControl = trainControl(method = "cv",number = 10,
+                           search = "random"),
+  tuneLength = 20
+)
+```
+
+```{r results = "hide"}
+bank.nb.ten.fold$results
+```
+
+Getting the best model and getting the metrics from the confusion matrix:
+
+```{r results = "hide", warning = FALSE}
+best.nb = bank.nb.ten.fold$finalModel
+best.nb.predictions = predict(best.nb, bank_data_test[,-c(7)])
+best.nb.conf.matrix = confusionMatrix(factor(best.nb.predictions), factor(bank_data_test[,c(7)]))
+best.nb.performance = extract_conf_matrix(best.nb.conf.matrix)
+```
+
+### Results Table
+
+```{r}
+complete.performance = data.frame(rbind(round(best.glm.performance,2),
+                                  best.nb.performance))
+row.names(complete.performance) <- c("Log.Regress", "NB")
+print(complete.performance)
+```
+
+The results above are from the test data. The logistic regression algorithm with the `family = "binomial"` was built as well as the Naive Bayes model with `usekernel = FALSE, laplace = 0, adjust = 1`. The logistic regression model displays a misleading accuracy of 0.90. Similarly, the Naive Bayes Model displays a misleading accuracy of 0.89. Looking at the balanced accuracies for both models, we can see that the Naive Bayes Model has a higher balanced accuracy of 0.63 in contrast to the logistic regression model's balanced accuracy of 0.58. The Naive Bayes model's F1 score is 0.94, beating the logistic regression model's F1 score of 0.28. For sensitivity, Naive Bayes model achieved a measure of 0.96 while the logistic regression model's sensitivity was 0.17. For specificity, the logistic regression model had a measure of 0.99 while the Naive Bayes model's specificity was 0.30. The Naive Bayes model holds the better positive predicted value and the logistic regression model holds the better negative predicted value. The Naive Bayes model has a higher kappa measure than the logistic regression.
+
+Looking at the balanced accuracy, specificity, F1 score, and kappa, the Naive Bayes model has outperformed the logistic regression model. Additionally, looking at the balanced accuracy for logistic regression and the Naive Bayes models, both did better than guessing. The Naive Bayes model would be the preferred model to use from these evaluations. As a result we can reject the null hypothesis. However, both of the models still have much to be desired as exemplified by the varying good and bad performance metrics in the table.
+
+# Discussion
+
+## Results
+
+Using the logistic regression algorithm and the Naive Bayes algorithm, two models were constructed using ten fold cross validation. Of the predictors chosen, cons.price.idx and housing predictors were removed using BIC. The Naive Bayes model was shown to outperform the logistic regression model in a number of metrics. Notably, both models, when looking at the balanced accuracy, performed better than guessing. Neither model managed to get a balanced accuracy above 0.63 though. We have shown that predictive models can be successfully built and used on the Bank Marketing dataset.
+
+## Limitations
+
+The most conspicuous limitation in this work has been due to the class distribution in the data. As stated before in the Data section, the minority class of sub_term is **yes** and is attributable to only 11 percent of the data. The majority class is **no** accounting for the remaining 89 percent. The major class imbalance makes for a distinct issue in attempting to try and build models. Randomly splitting the data into the train and test datasets, it can be observed the best possibility is maintaining relatively the same proportions for the distribution of classes. Ideally, if more instances of the minority class were present, then there would be less concern for the class imbalance. Ideally, the classes would be distributed roughly equally amongst the data.
+
+Another limitation is that only two algorithms were used resulting in only two models. There is a broad catalogue of algorithms to build predictive models, and even more variations of models that can be built by utilizing different tuning parameters. Being able to utilize to tune those parameters can yield different models that may perform better or worse than the Naive Bayes model and logistic regression model seen here.
+
+## Future Work
+
+Being able to obtain more data, especially to increase the proportion of the minority class of the response variable of subscription in regard to the term deposit would be valuable. Having that data available would ideally lessen the severity of the class imbalance issue faced here.
+
+Additionally, there can be exploration into a broader range of machine learning algorithms. This way more models may be produced to be trained and tested. The new models can then be evaluated to see if their performance is better or worse than the Naive Bayes and logistic regression models constructed in this work.
+
+Parallelization of the training and ten fold cross-validation would be helpful in decreasing the overall time expended when expanding the number of models used. This way multiple variations of the same model with different parameters can run concurrently rather than sequentially.
+
+# Acknowledgements
+
+Thanks to Dr. Kim for providing the tools and resources through the MATH 782 course to complete this project.
+
+# References
+
+Alves Werb, G., & Schmidberger, M. (2021). Predictive Modeling in Marketing: Ensemble Methods for Response Modeling. Alves Werb, G., & Schmidberger, M.(2021). Predictive Modeling in Marketing: Ensemble Methods for Response Modeling. Die Unternehmung, 75(3), 376-396.
+
+David W.. Hosmer, Lemeshow, S., & Rodney X.. Sturdivant. (2000). Applied logistic regression. New York: Wiley.
+
+Kotras, B. (2020). Mass personalization: Predictive marketing algorithms and the reshaping of consumer knowledge. Big Data & Society, 7(2), 2053951720951581.
+
+Narsimlu, M., & Kumar, M. S. (2021). FUTURISTIC RESEARCH ON DIGITAL MARKETING DATA TO IDENTIFY LEADS USING PREDICTIVE ANALYTICS. International Journal of Management (IJM), 12(6).
+
+Ranganathan, P., Pramesh, C. S., & Aggarwal, R. (2017). Common pitfalls in statistical analysis: logistic regression. Perspectives in clinical research, 8(3), 148.
+
+Rish, I. (2001, August). An empirical study of the naive Bayes classifier. In IJCAI 2001 workshop on empirical methods in artificial intelligence (Vol. 3, No. 22, pp. 41-46).
+
+Zhang, H. (2004). The optimality of naive Bayes. AA, 1(2), 3.
+
+## Data Source
+
+[Moro et al., 2014] S. Moro, P. Cortez and P. Rita. A Data-Driven Approach to Predict the Success of Bank Telemarketing. Decision Support Systems, Elsevier, 62:22-31, June 2014.
+
+Dua, D. and Graff, C. (2019). UCI Machine Learning Repository [<http://archive.ics.uci.edu/ml>]. Irvine, CA: University of California, School of Information and Computer Science.
+
+# Appendix
+
+Code Has been added here:
+
+## Loading Packages
+
+```{r message = FALSE, results="hide", eval = FALSE}
+library(easypackages)
+libraries("readr","tidyverse",
+          "viridis", "corrplot",
+          "GGally", "caret",
+          "caret", "naivebayes",
+          "MASS", "boot")
+```
+
+Code for loading the data:
+
+```{r results = "hide", eval = FALSE}
+#Loading in the data
+bank_load <- read.csv("./bank_dataset_without_semicolons.csv") %>%
+  dplyr::select(., -c(X, duration))
+```
+
+Removing the index and duration:
+
+```{r results = "hide", eval = FALSE}
+bank_data <- bank_load %>% 
+  dplyr::select(., age, housing, contact, campaign, previous,
+         poutcome, cons.price.idx, cons.conf.idx,y)
+```
+
+Get the dimensions of the data to be used in this work:
+
+```{r results = "hide", eval = FALSE}
+print(dim(bank_load))
+```
+
+#### Missing Values
+
+Counting up all the missing values within the dataset:
+
+```{r results = "hide", eval = FALSE}
+bank_data[bank_data=="unknown"]<- NA
+bank_data[bank_data==""]<- NA
+bank_data %>%
+  summarise_all(funs(sum(is.na(.))))
+```
+
+#### Variables
+
+Renaming y to sub_term to be more descriptive:
+
+```{r results = "hide", eval = FALSE}
+bank_data = bank_data %>%
+  rename(sub_term = "y")
+```
+
+Factor conversion for the qualitative variables:
+
+```{r results = "hide", eval = FALSE}
+options(digits=2)
+bank_data = bank_data %>% 
+  na.omit(.) %>%
+  mutate(housing = factor(housing),
+         contact = factor(contact),
+         poutcome = factor(poutcome),
+         sub_term = factor(sub_term),
+         previous = as.ordered(previous))
+```
+
+#### Descriptive Statistics
+
+##### Qualitative
+
+###### Housing
+
+Getting the descriptive statistics for housing
+
+```{r results = "hide", eval = FALSE}
+
+quant.var.descript.housing = bank_data %>% 
+  dplyr::select(., housing) %>% 
+  group_by(housing) %>% 
+  count() %>%
+  rename(freq = "n") %>%
+  mutate(percentage = freq/nrow(bank_data) *100)
+```
+
+```{r results = "hide", eval = FALSE}
+print(quant.var.descript.housing)
+```
+
+###### Contact
+
+Getting the descriptive statistics for contact:
+
+```{r results = "hide", eval = FALSE}
+quant.var.descript.contact = bank_data %>% 
+  dplyr::select(., contact) %>% 
+  group_by(contact) %>% 
+  count() %>%
+  rename(freq = "n") %>%
+  mutate(percentage = freq/nrow(bank_data) * 100)
+```
+
+```{r results = "hide", eval = FALSE}
+print(quant.var.descript.contact)
+```
+
+###### Poutcome
+
+Getting the descriptive statistics for poutcome:
+
+```{r results = "hide", eval = FALSE}
+quant.var.descript.poutcome = bank_data %>% 
+  dplyr::select(., poutcome) %>% 
+  group_by(poutcome) %>% 
+  count() %>%
+  rename(freq = "n") %>%
+  mutate(percentage = freq/nrow(bank_data) * 100)
+```
+
+```{r results = "hide", eval = FALSE}
+print(quant.var.descript.poutcome)
+```
+
+###### Sub_term
+
+Getting the descriptive statistics for sub_term:
+
+```{r results = "hide", eval = FALSE}
+quant.var.descript.sub_term = bank_data %>% 
+  dplyr::select(., sub_term) %>% 
+  group_by(sub_term) %>% 
+  count() %>%
+  rename(freq = "n") %>%
+  mutate(percentage = freq/nrow(bank_data) * 100)
+```
+
+```{r results = "hide", eval = FALSE}
+print(quant.var.descript.sub_term)
+```
+
+##### Checking Correlation Between Campaign, Cons.price.idx, Cons.conf.idx
+
+```{r results = "hide", eval = FALSE}
+ggpairs(bank_data[,c(1,4,7:8)])
+```
+
+##### Quantitative
+
+###### Age, Campaign, Cons.price.idx, Cons.conf.idx
+
+```{r results = "hide", eval = FALSE}
+#Calculating min, mean, standard deviation, max, median
+quantit.descipt = bank_data %>% 
+  dplyr::select(.,age, campaign, cons.price.idx, cons.conf.idx) %>%
+  summarise_all(funs(min,median,max,mean,sd),
+                na.rm = T)
+#Calculating Q1
+quant.descript.q1 = bank_data %>% 
+  dplyr::select(.,age, campaign, cons.price.idx, cons.conf.idx) %>%
+  summarise_all(funs(quantile),
+                probs = 0.25)
+#Calculating Q3
+quant.descript.q3 = bank_data %>% 
+  dplyr::select(.,age, campaign, cons.price.idx, cons.conf.idx) %>%
+  summarise_all(funs(quantile),
+                probs = 0.75)
+
+#Transforming into a neat dataframe:
+quantit.descipt <- data.frame(quantit.descipt,
+           quant.descript.q1,
+           quant.descript.q3)
+quantit.descipt = data.frame(t(quantit.descipt[,1:4]),
+           t(quantit.descipt[,5:8]),
+           t(quantit.descipt[,9:12]),
+           t(quantit.descipt[,13:16]),
+           t(quantit.descipt[,17:20]),
+           t(quantit.descipt[,21:24]),
+           t(quantit.descipt[,25:28]))
+names(quantit.descipt) <- c("min", "median", "max",
+                            "mean", "stand_dev", "Q1",
+                            "Q3")
+row.names(quantit.descipt) <- c("age",
+                                "campaign", "cons.price.idx",
+                                "cons.conf.idx")
+#Reorganizing the columns:
+quantit.descipt = quantit.descipt[,c("min", "Q1", "median",
+                   "Q3", "max", "mean",
+                   "stand_dev")]
+```
+
+```{r results = "hide", eval = FALSE}
+print(quantit.descipt)
+```
+
+###### Previous
+
+```{r results = "hide", eval = FALSE}
+quant.var.descript.previous = bank_data %>% 
+  dplyr::select(., previous) %>% 
+  group_by(previous) %>% 
+  count() %>%
+  rename(freq = "n") %>%
+  mutate(percentage = freq/nrow(bank_data) * 100)
+```
+
+```{r results = "hide", eval = FALSE}
+print(quant.var.descript.previous)
+```
+
+### Visuals With Respect to the Response Variable Sub_term
+
+#### Age
+
+```{r results = "hide", eval = FALSE}
+sub_term.to.age.1 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = age)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(title = "Subscription Status and Age",
+       x = "Subscribed to Term Deposit",
+       y="Age") + 
+  scale_fill_viridis(discrete = T) 
+
+sub_term.to.age.2 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = age)) +
+  geom_violin(aes(fill = sub_term)) +
+  theme_bw() +
+  labs(title = "Subscription Status and Age",
+       x = "Subscribed to Term Deposit",
+       y="Age") + 
+  scale_fill_viridis(discrete = T) 
+  
+```
+
+```{r results = "hide", eval = FALSE}
+print(sub_term.to.age.1)
+print(sub_term.to.age.2)
+```
+
+#### Housing
+
+```{r results = "hide", eval = FALSE}
+sub_term.to.home <- bank_data %>%
+  group_by(housing, sub_term) %>%
+  count(.) %>%
+  rename(.,freq = "n") %>%
+  ggplot(aes(x = housing, y = freq, fill = sub_term)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(title = "Subscription Status and Home Loan Status",
+       x = "Home Loan",
+       y="Frequency") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r results = "hide", eval = FALSE}
+print(sub_term.to.home)
+```
+
+#### Housing
+
+```{r results = "hide", eval = FALSE}
+sub_term.to.contact <- bank_data %>%
+  group_by(contact, sub_term) %>%
+  count(.) %>%
+  rename(.,freq = "n") %>%
+  ggplot(aes(x = contact, y = freq, fill = sub_term)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(title = "Subscription Status and Contact Method",
+       x = "Contact",
+       y="Frequency") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r results = "hide", eval = FALSE}
+print(sub_term.to.contact)
+```
+
+#### Campaign
+
+```{r results = "hide", eval = FALSE}
+sub_term.to.campaign.1 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = campaign)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(title = "Subscription Status and Campaign Count",
+       x = "Subscription to the Term Deposit",
+       y="Campaign Count")
+
+sub_term.to.campaign.2 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = campaign, fill=sub_term)) +
+  geom_violin() +
+  theme_bw() +
+  labs(title = "Subscription Status and Campaign Count",
+       x = "Subscription to the Term Deposit",
+       y="Campaign Count") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r results = "hide", eval = FALSE}
+print(sub_term.to.campaign.1)
+print(sub_term.to.campaign.2)
+```
+
+#### Previous
+
+```{r results = "hide", eval = FALSE}
+sub_term.to.previous <- bank_data %>%
+  group_by(previous, sub_term) %>%
+  count(.) %>%
+  rename(.,freq = "n") %>%
+  ggplot(aes(x = previous, y = freq, fill = sub_term)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(title = "Subscription Status and Previous Contact Attempts",
+       x = "Previous Contact Count",
+       y="Frequency") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r results = "hide", eval = FALSE}
+print(sub_term.to.previous)
+```
+
+#### Poutcome
+
+```{r results = "hide", eval = FALSE}
+sub_term.to.poutcome <- bank_data %>%
+  group_by(poutcome, sub_term) %>%
+  count(.) %>%
+  rename(.,freq = "n") %>%
+  ggplot(aes(x = poutcome, y = freq, fill = sub_term)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(title = "Subscription Status and Previous Contact Result",
+       x = "Previous Contact Result",
+       y="Frequency") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r results = "hide", eval = FALSE}
+print(sub_term.to.poutcome)
+```
+
+#### Cons.price.idx
+
+```{r results = "hide", eval = FALSE}
+sub_term.to.cpi.1 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = cons.price.idx)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(title = "Subscription Status and Consumer Price Index",
+       x = "Subscription to the Term Deposit",
+       y="Consumer Price Index")
+
+sub_term.to.cpi.2 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = cons.price.idx, fill=sub_term)) +
+  geom_violin() +
+  theme_bw() +
+  labs(title = "Subscription Status and Consumer Price Index",
+       x = "Subscription to the Term Deposit",
+       y="Consumer Price Index") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r results = "hide", eval = FALSE}
+print(sub_term.to.cpi.1)
+print(sub_term.to.cpi.2)
+```
+
+#### Cons.conf.idx
+
+```{r results = "hide", eval = FALSE}
+sub_term.to.cci.1 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = cons.conf.idx)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(title = "Subscription Status and Consumer Confidence Index",
+       x = "Subscription to the Term Deposit",
+       y="Consumer Confidence Index")
+
+sub_term.to.cci.2 <- bank_data %>%
+  ggplot(aes(x = sub_term, y = cons.conf.idx, fill=sub_term)) +
+  geom_violin() +
+  theme_bw() +
+  labs(title = "Subscription Status and Consumer Confidence Index",
+       x = "Subscription to the Term Deposit",
+       y="Consumer Confidence Index") +
+  scale_fill_viridis(discrete = T)
+```
+
+```{r eval = FALSE}
+print(sub_term.to.cci.1)
+print(sub_term.to.cci.2)
+```
+
+## Analysis
+
+### Models
+
+```{r eval = FALSE}
+#Function to extract the relevant metrics from the confusion matrix.
+extract_conf_matrix<-function(conf_matrix_obj){
+  overall.matrix <- as.matrix(conf_matrix_obj, what="overall")
+  classes.matrix <- as.matrix(conf_matrix_obj, what="classes")
+  metrics <- c(overall.matrix[1], overall.matrix[2], classes.matrix[1], classes.matrix[2],
+               classes.matrix[3], classes.matrix[4], classes.matrix[7], classes.matrix[11])
+  names(metrics) <- c("Accuracy","Kappa", "Sensitivity", "Specificity", "PPV", "NPV", "F1", "Balanced accuracy")
+  metrics_data <- t(as.matrix(metrics))
+  metrics_data <- data.frame(metrics_data)
+  return(metrics_data)
+}
+```
+
+#### Data Partitioning
+
+```{r eval = FALSE}
+set.seed(9)
+training_bank_index = createDataPartition(bank_data$sub_term, times = 1, p= 0.7, list = FALSE)
+bank_data_train = bank_data[training_bank_index,]
+bank_data_test =bank_data[-training_bank_index,]
+```
+
+#### Logistic Regression
+
+```{r results = "hide", eval = FALSE}
+bank_base_log_regress = glm(sub_term~., bank_data_train, family = "binomial")
+```
+
+Getting the summary for the model:
+
+```{r results = "hide", eval = FALSE}
+summary(bank_base_log_regress)
+```
+
+We will get the confidence interval at the 95% significance level as well:
+
+```{r warning=FALSE, results = "hide", eval = FALSE}
+confint(bank_base_log_regress)
+```
+
+Initiating BIC:
+
+```{r results = "hide", eval = FALSE}
+set.seed(11)
+bank_step_log_regress =stepAIC(bank_base_log_regress,
+                               diraction = "both", k = log(7))
+```
+
+```{r results = "hide", eval = FALSE}
+formula(bank_step_log_regress)
+```
+
+We get the summary for the model:
+
+```{r results = "hide", eval = FALSE}
+summary(bank_step_log_regress)
+```
+
+and the confidence interval at the 95% significance level of the coefficients:
+
+```{r warning = FALSE, results = "hide", eval = FALSE}
+confint(bank_step_log_regress)
+```
+
+Removing cons.price.idx from the training and test data:
+
+```{r eval = FALSE}
+bank_data_train = bank_data_train[,-c(2,7)]
+bank_data_test = bank_data_test[,-c(2,7)]
+```
+
+```{r warning = FALSE, results = "hide", eval = FALSE}
+set.seed(12)
+bank.glm.ten.fold = train(
+  x = bank_data_train[,-c(7)],
+  y = bank_data_train[,c(7)],
+  method="glm",
+  metric = "Kappa",
+  trControl = trainControl(method = "cv",number = 10,
+                           search = "random"),
+  tuneLength = 10,
+  family = "binomial"
+)
+```
+
+Getting the results of the best model:
+
+```{r results = "hide", eval = FALSE}
+bank.glm.ten.fold$results
+```
+
+Getting the best model, its predictions and confusion matrix:
+
+```{r warning = FALSE, eval = FALSE}
+# Getting the predictions of the GLM from the probabilties
+best.glm = bank.glm.ten.fold$finalModel
+best.glm.probabilties =predict.glm(best.glm, bank_data_test[,-c(7)], type = "response")
+best.glm.predictions = ifelse(best.glm.probabilties >= 0.5, "yes", "no")
+glm.conf.matrix = confusionMatrix(factor(best.glm.predictions), factor( bank_data_test[,c(7)]), positive="yes", mode="everything")
+best.glm.performance = extract_conf_matrix(glm.conf.matrix)
+```
+
+#### Naive Bayes
+
+Constructing the model:
+
+```{r warning = FALSE, eval = FALSE}
+set.seed(11)
+bank.nb.ten.fold = train(
+  x = bank_data_train[,-c(7)],
+  y = bank_data_train[,c(7)],
+  method="naive_bayes",
+  metric = "Kappa",
+  trControl = trainControl(method = "cv",number = 10,
+                           search = "random"),
+  tuneLength = 20
+)
+```
+
+```{r eval = FALSE}
+bank.nb.ten.fold$results
+```
+
+Getting the best model and getting the metrics from the confusion matrix:
+
+```{r warning = FALSE, eval = FALSE}
+best.nb = bank.nb.ten.fold$finalModel
+best.nb.predictions = predict(best.nb, bank_data_test[,-c(7)])
+best.nb.conf.matrix = confusionMatrix(factor(best.nb.predictions), factor(bank_data_test[,c(7)]))
+best.nb.performance = extract_conf_matrix(best.nb.conf.matrix)
+```
+
+#### Results Table
+
+```{r eval = FALSE}
+complete.performance = data.frame(rbind(round(best.glm.performance,2),
+                                  best.nb.performance))
+row.names(complete.performance) <- c("Log.Regress", "NB")
+print(complete.performance)
+```
+
+## Data After Preprocessing
+
+```{r}
+print(bank_data.preserve)
+```
+
+## Data Before Preprocessing
+
+```{r}
+print(bank_load)
+```
